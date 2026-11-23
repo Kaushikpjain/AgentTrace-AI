@@ -1,0 +1,7 @@
+{
+  "run_id": "a589c05099f44170933e782764944112",
+  "evaluation_seconds": 1.914,
+  "localization_and_regression_seconds": 1.126,
+  "instances": 30,
+  "peak_rss_bytes": 43401216
+}
