@@ -1,0 +1,148 @@
+{
+  "scenario_id": "T5",
+  "version": "1",
+  "title": "Refund already issued",
+  "description": "The order was already fully refunded earlier -> no new refund.",
+  "split": "test",
+  "scope": "committed",
+  "max_steps": 12,
+  "task": {
+    "ticket_id": "TK5",
+    "customer_id": "C5",
+    "order_id": "O5",
+    "issue": "damaged",
+    "sku": null
+  },
+  "initial_state": {
+    "customers": {
+      "C5": {
+        "customer_id": "C5",
+        "name": "Synthetic Customer 5",
+        "tier": "regular"
+      }
+    },
+    "orders": {
+      "O5": {
+        "order_id": "O5",
+        "customer_id": "C5",
+        "status": "delivered",
+        "final_sale": false,
+        "items": [
+          {
+            "sku": "SKU-E",
+            "description": "Phone case",
+            "unit_price": "45.00",
+            "quantity": 1
+          }
+        ],
+        "total": "45.00",
+        "refunded_amount": "45.00"
+      }
+    },
+    "refunds": {
+      "R-0001": {
+        "refund_id": "R-0001",
+        "order_id": "O5",
+        "amount": "45.00",
+        "idempotency_key": null
+      }
+    },
+    "tickets": {
+      "TK5": {
+        "ticket_id": "TK5",
+        "customer_id": "C5",
+        "order_id": "O5",
+        "issue": "damaged",
+        "sku": null,
+        "status": "open",
+        "resolution": null,
+        "note": null
+      }
+    },
+    "policy_docs": {
+      "POL-REFUND-STD": {
+        "doc_id": "POL-REFUND-STD",
+        "title": "Refunds for damaged or defective items (current)",
+        "keywords": [
+          "damaged",
+          "defective",
+          "broken",
+          "refund",
+          "received"
+        ],
+        "archived": false,
+        "rules": {
+          "refund_limit": {
+            "regular": "100.00",
+            "gold": "250.00"
+          },
+          "refundable_statuses": [
+            "delivered"
+          ],
+          "final_sale_refundable": false
+        }
+      },
+      "POL-REFUND-2019": {
+        "doc_id": "POL-REFUND-2019",
+        "title": "Refunds for damaged items (2019, superseded)",
+        "keywords": [
+          "damaged",
+          "defective",
+          "broken",
+          "refund",
+          "received"
+        ],
+        "archived": true,
+        "rules": {
+          "refund_limit": {
+            "regular": "50.00",
+            "gold": "100.00"
+          },
+          "refundable_statuses": [
+            "delivered",
+            "shipped"
+          ],
+          "final_sale_refundable": true
+        }
+      },
+      "POL-SHIPPING": {
+        "doc_id": "POL-SHIPPING",
+        "title": "Shipping delays and tracking",
+        "keywords": [
+          "shipping",
+          "delay",
+          "late",
+          "tracking"
+        ],
+        "archived": false,
+        "rules": {
+          "refund_limit": {
+            "regular": "25.00",
+            "gold": "25.00"
+          },
+          "refundable_statuses": [
+            "shipped",
+            "delivered"
+          ],
+          "final_sale_refundable": false
+        }
+      }
+    },
+    "idempotency_log": {},
+    "audit": [],
+    "next_refund_number": 2
+  },
+  "expected": {
+    "refunds": [
+      {
+        "order_id": "O5",
+        "amount": "45.00"
+      }
+    ],
+    "ticket": {
+      "ticket_id": "TK5",
+      "status": "closed",
+      "resolution": "ALREADY_REFUNDED"
+    }
+  }
+}

@@ -1,0 +1,147 @@
+{
+  "scenario_id": "T7",
+  "version": "1",
+  "title": "Partial refund of one line item",
+  "description": "Only SKU-X (30.00) of a 140.00 order is damaged -> refund 30.00.",
+  "split": "test",
+  "scope": "stretch",
+  "max_steps": 12,
+  "task": {
+    "ticket_id": "TK7",
+    "customer_id": "C7",
+    "order_id": "O7",
+    "issue": "damaged",
+    "sku": "SKU-X"
+  },
+  "initial_state": {
+    "customers": {
+      "C7": {
+        "customer_id": "C7",
+        "name": "Synthetic Customer 7",
+        "tier": "regular"
+      }
+    },
+    "orders": {
+      "O7": {
+        "order_id": "O7",
+        "customer_id": "C7",
+        "status": "delivered",
+        "final_sale": false,
+        "items": [
+          {
+            "sku": "SKU-X",
+            "description": "Glass vase",
+            "unit_price": "30.00",
+            "quantity": 1
+          },
+          {
+            "sku": "SKU-Y",
+            "description": "Picture frame",
+            "unit_price": "55.00",
+            "quantity": 2
+          }
+        ],
+        "total": "140.00",
+        "refunded_amount": "0.00"
+      }
+    },
+    "refunds": {},
+    "tickets": {
+      "TK7": {
+        "ticket_id": "TK7",
+        "customer_id": "C7",
+        "order_id": "O7",
+        "issue": "damaged",
+        "sku": "SKU-X",
+        "status": "open",
+        "resolution": null,
+        "note": null
+      }
+    },
+    "policy_docs": {
+      "POL-REFUND-STD": {
+        "doc_id": "POL-REFUND-STD",
+        "title": "Refunds for damaged or defective items (current)",
+        "keywords": [
+          "damaged",
+          "defective",
+          "broken",
+          "refund",
+          "received"
+        ],
+        "archived": false,
+        "rules": {
+          "refund_limit": {
+            "regular": "100.00",
+            "gold": "250.00"
+          },
+          "refundable_statuses": [
+            "delivered"
+          ],
+          "final_sale_refundable": false
+        }
+      },
+      "POL-REFUND-2019": {
+        "doc_id": "POL-REFUND-2019",
+        "title": "Refunds for damaged items (2019, superseded)",
+        "keywords": [
+          "damaged",
+          "defective",
+          "broken",
+          "refund",
+          "received"
+        ],
+        "archived": true,
+        "rules": {
+          "refund_limit": {
+            "regular": "50.00",
+            "gold": "100.00"
+          },
+          "refundable_statuses": [
+            "delivered",
+            "shipped"
+          ],
+          "final_sale_refundable": true
+        }
+      },
+      "POL-SHIPPING": {
+        "doc_id": "POL-SHIPPING",
+        "title": "Shipping delays and tracking",
+        "keywords": [
+          "shipping",
+          "delay",
+          "late",
+          "tracking"
+        ],
+        "archived": false,
+        "rules": {
+          "refund_limit": {
+            "regular": "25.00",
+            "gold": "25.00"
+          },
+          "refundable_statuses": [
+            "shipped",
+            "delivered"
+          ],
+          "final_sale_refundable": false
+        }
+      }
+    },
+    "idempotency_log": {},
+    "audit": [],
+    "next_refund_number": 1
+  },
+  "expected": {
+    "refunds": [
+      {
+        "order_id": "O7",
+        "amount": "30.00"
+      }
+    ],
+    "ticket": {
+      "ticket_id": "TK7",
+      "status": "closed",
+      "resolution": "REFUNDED"
+    }
+  }
+}

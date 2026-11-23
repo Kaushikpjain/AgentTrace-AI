@@ -1,0 +1,88 @@
+# Architecture Decision Records
+
+Each ADR is short: context, decision, alternatives, trade-offs, and status. Change an ADR by adding a new one that supersedes it; do not silently edit history.
+
+| ADR | Title | Status |
+|---|---|---|
+| 001 | Python 3.12 + uv, isolated project environment | Accepted |
+| 002 | Modular monolith | Accepted |
+| 003 | JSONL/JSON file persistence behind a `TraceStore` protocol | Accepted |
+| 004 | Deterministic scripted agent policy for the MVP | Accepted |
+| 005 | Explicit replay contracts with state re-application | Accepted |
+| 006 | No mandatory paid API; hosted models optional and off by default | Accepted |
+| 007 | CLI-first (Typer + Rich), no web stack in the MVP | Accepted |
+| 008 | Ids from environment-state counters; no clock/idgen boundaries in the MVP | Accepted |
+| 009 | Observable trace vs. privileged execution ledger | Accepted |
+| 010 | Research isolation, licensing and disclosure | Accepted (licence choice pending) |
+| 011 | Scenario templates shipped as package data | Accepted |
+| 012 | Config fingerprint includes policy/tool source hashes | Accepted |
+| 013 | Decimal-only money; canonical JSON with normalized Decimals; floats rejected | Accepted |
+
+---
+
+## ADR-001: Python 3.12 + uv
+- **Context:** an 8 GB M2 laptop; Homebrew provides Python 3.12.14 and 3.14; uv 0.11 is installed. System Python must not be modified.
+- **Decision:** `requires-python = ">=3.12,<3.13"`, with `.python-version = 3.12`. uv creates a project-local `.venv` from the existing Homebrew 3.12 interpreter. Dependencies are locked in `uv.lock`, and dev tools live in a PEP 735 `dev` dependency group.
+- **Alternatives:** Python 3.14 (newer, but less library certainty and different CI images); Poetry (slower, extra tool); pip + venv (no lockfile).
+- **Trade-offs:** pinning to 3.12 limits language features (no `uuid7` in the stdlib), which is acceptable.
+
+## ADR-002: Modular monolith
+- **Decision:** one package `agenttrace` with sub-packages `trace`, `env`, `policies`, `runtime`, `evals`, `cli` (later `replay`, `faults`, `localize`, `bench`, `report`). Dependencies point downward (see ARCHITECTURE.md §3).
+- **Alternatives:** separate services (API + workers + UI): no need at this scale, and costly on 8 GB.
+- **Trade-offs:** boundaries are enforced by convention plus tests, not by process isolation.
+
+## ADR-003: JSONL persistence behind `TraceStore`
+- **Decision:** each run is a directory `runs/<run_id>/` with `header.json`, `events.jsonl`, `ledger.jsonl` and `footer.json`. It is written to a hidden temp directory, then atomically renamed. Loading validates the schema, the hash chain and completeness.
+- **Alternatives:** SQLite (queryable, but harder to read and diff, and unneeded at MVP scale); PostgreSQL (needs a server).
+- **Trade-offs:** no indexed queries; listing runs is O(#runs). The `TraceStore` protocol allows a SQLite implementation in Level 2 without touching callers.
+
+## ADR-004: Deterministic scripted policy
+- **Decision:** the MVP agent is `ScriptedSupportPolicy` (versions `v1` and `v2`), a pure function of (task, observation history). It sits behind the same `decision` boundary an LLM would use. A `ReferencePolicy` interface wraps the gold (`v2`) policy for trusted references.
+- **Alternatives:** a small local LLM (stochastic; RAM cost; ground truth unclear); a hosted LLM (cost).
+- **Trade-offs:** no real LLM in the MVP, which weakens the GenAI signal. This is mitigated by Phase 2A (local LLM policy) directly after the MVP (PLAN §21).
+
+## ADR-005: Explicit replay contracts with state re-application
+- **Decision:** there are four modes, RECORD, REPLAY_STRICT, REPLAY_INTERVENE and REGRESSION, each with its own contract in REPLAY_SPEC.md. Exact replay **re-executes** sandbox tools and verifies state hashes, raw results and delivered responses. It does not simply play back outputs. Cassette lookups are positional and verified with all keys; a cassette fence applies at the intervention point; any mismatch fails closed.
+- **Alternatives:** pure playback (cannot reproduce the final state for the oracle); lookup by request hash (can reuse the wrong response after branching).
+- **Trade-offs:** tools must be deterministic and re-executable. Non-re-executable tools need the Level 2 `PLAYBACK_WITH_DELTAS` mode with a weaker guarantee.
+
+## ADR-006: No mandatory paid API
+- **Decision:** everything in Level 1 runs offline with no LLM. Any hosted model integration (Level 2+) is opt-in (`ATRACE_ALLOW_PAID=1`) and wrapped in a budget guard.
+
+## ADR-007: CLI-first
+- **Decision:** a Typer CLI (`atrace`) with Rich output. FastAPI/React come in Phase 2C.
+- **Alternatives:** argparse (fewer dependencies, worse ergonomics); a web UI now (too costly).
+
+## ADR-008: Ids from state counters; no clock/idgen boundaries
+- **Context:** v0.2 planned `clock` and `idgen` boundaries.
+- **Decision:** the support environment derives refund ids from `next_refund_number` in its state, which snapshots/restores and hashes with everything else. It never reads a clock. The `CLOCK` and `IDGEN` boundary kinds remain in the schema enum as reserved values. Run and span ids are generated by `agenttrace.trace.ids` (random UUIDs). They are execution-specific and excluded from semantic fingerprints.
+- **Trade-offs:** an environment that needs time later must obtain it through a gateway boundary, which is reserved for that purpose.
+
+## ADR-009: Observable trace vs. execution ledger
+- **Context:** correction C2 requires recording raw results and fault applications separately from delivered responses. Correction C3 forbids localizers from seeing ground truth.
+- **Decision:** `events.jsonl` (observable: requests, delivered responses, state transitions) is readable by localizers. `ledger.jsonl` (raw outputs, executed flags, fault applications with stage) is privileged: only the replay engine and the benchmark validator read it, via `TraceStore.load_ledger`. Benchmark labels live in a separate `labels.jsonl`.
+- **Trade-offs:** state transitions are observable (it is a sandbox whose state can be inspected), so a lost-ack timeout shows `status=timeout` together with `committed=true`. This is realistic: a database log would show the same.
+
+## ADR-010: Research isolation, licensing and disclosure
+- **Decision:**
+  - This repository holds only the engineering foundation and standard methods. Speculative research algorithms go in a separate private repository.
+  - **No licence file is added yet**, and the `Private :: Do Not Upload` classifier blocks accidental PyPI upload.
+  - Nothing is pushed or published without explicit approval.
+  - The recommended future licence for the public foundation is Apache-2.0, pending approval and IPR-cell input.
+  - `docs/PLAN_v0.2.1.md` §22 and `docs/archive/` contain research-sensitive planning material. **Before any public release they must be removed from the tree and from git history** (or never committed).
+- **Note:** neither withholding publication nor choosing a licence creates patent rights.
+
+## ADR-011: Scenario templates as package data
+- **Decision:** clean scenario templates are JSON files inside `agenttrace/env/support/scenarios/`, loaded via `importlib.resources`, so the CLI works from any working directory. Generated benchmark instances (Week 3) go under `benchmarks/`.
+
+## ADR-012: Config fingerprint covers source code
+- **Decision:** `AgentRef.source_hash` = sha256 of the policy module source; the tool-manifest hash covers tool names, mutating flags, argument JSON schemas and the tools module source. Changing agent or tool code therefore changes the config fingerprint, so REPLAY_STRICT refuses with `CONFIG_MISMATCH` (REPLAY_SPEC §8).
+- **Trade-offs:** comment-only edits also change the hash. This is deliberate: it is conservative and fails closed.
+
+## ADR-013: Money and canonical JSON
+- **Decision:** money is `Decimal`, quantized to 2 places in the environment models. Canonical JSON:
+  - Decimals become their normalized plain string (`80.00` → `"80"`); NaN and infinity are rejected.
+  - Floats are rejected.
+  - Keys are sorted, with compact separators, UTF-8, and strings NFC-normalized.
+  - Event payloads are converted to JSON-pure values at record time, so stored and reloaded events are equal.
+- **Trade-offs:** stored money strings lose trailing zeros (`"80"`). Readability suffers a little in exchange for semantic equality.

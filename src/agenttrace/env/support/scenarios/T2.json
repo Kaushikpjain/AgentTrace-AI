@@ -1,0 +1,136 @@
+{
+  "scenario_id": "T2",
+  "version": "1",
+  "title": "Damaged item above refund limit",
+  "description": "Regular-tier customer, order 150.00 exceeds the 100.00 limit -> escalate, no refund.",
+  "split": "dev",
+  "scope": "committed",
+  "max_steps": 12,
+  "task": {
+    "ticket_id": "TK2",
+    "customer_id": "C2",
+    "order_id": "O2",
+    "issue": "damaged",
+    "sku": null
+  },
+  "initial_state": {
+    "customers": {
+      "C2": {
+        "customer_id": "C2",
+        "name": "Synthetic Customer 2",
+        "tier": "regular"
+      }
+    },
+    "orders": {
+      "O2": {
+        "order_id": "O2",
+        "customer_id": "C2",
+        "status": "delivered",
+        "final_sale": false,
+        "items": [
+          {
+            "sku": "SKU-B",
+            "description": "Desk lamp",
+            "unit_price": "75.00",
+            "quantity": 2
+          }
+        ],
+        "total": "150.00",
+        "refunded_amount": "0.00"
+      }
+    },
+    "refunds": {},
+    "tickets": {
+      "TK2": {
+        "ticket_id": "TK2",
+        "customer_id": "C2",
+        "order_id": "O2",
+        "issue": "damaged",
+        "sku": null,
+        "status": "open",
+        "resolution": null,
+        "note": null
+      }
+    },
+    "policy_docs": {
+      "POL-REFUND-STD": {
+        "doc_id": "POL-REFUND-STD",
+        "title": "Refunds for damaged or defective items (current)",
+        "keywords": [
+          "damaged",
+          "defective",
+          "broken",
+          "refund",
+          "received"
+        ],
+        "archived": false,
+        "rules": {
+          "refund_limit": {
+            "regular": "100.00",
+            "gold": "250.00"
+          },
+          "refundable_statuses": [
+            "delivered"
+          ],
+          "final_sale_refundable": false
+        }
+      },
+      "POL-REFUND-2019": {
+        "doc_id": "POL-REFUND-2019",
+        "title": "Refunds for damaged items (2019, superseded)",
+        "keywords": [
+          "damaged",
+          "defective",
+          "broken",
+          "refund",
+          "received"
+        ],
+        "archived": true,
+        "rules": {
+          "refund_limit": {
+            "regular": "50.00",
+            "gold": "100.00"
+          },
+          "refundable_statuses": [
+            "delivered",
+            "shipped"
+          ],
+          "final_sale_refundable": true
+        }
+      },
+      "POL-SHIPPING": {
+        "doc_id": "POL-SHIPPING",
+        "title": "Shipping delays and tracking",
+        "keywords": [
+          "shipping",
+          "delay",
+          "late",
+          "tracking"
+        ],
+        "archived": false,
+        "rules": {
+          "refund_limit": {
+            "regular": "25.00",
+            "gold": "25.00"
+          },
+          "refundable_statuses": [
+            "shipped",
+            "delivered"
+          ],
+          "final_sale_refundable": false
+        }
+      }
+    },
+    "idempotency_log": {},
+    "audit": [],
+    "next_refund_number": 1
+  },
+  "expected": {
+    "refunds": [],
+    "ticket": {
+      "ticket_id": "TK2",
+      "status": "closed",
+      "resolution": "ESCALATED"
+    }
+  }
+}

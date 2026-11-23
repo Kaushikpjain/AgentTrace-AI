@@ -1,0 +1,136 @@
+{
+  "scenario_id": "T4",
+  "version": "1",
+  "title": "Order not yet delivered",
+  "description": "Customer reports an item not received while the order is still shipped -> pending.",
+  "split": "dev",
+  "scope": "stretch",
+  "max_steps": 12,
+  "task": {
+    "ticket_id": "TK4",
+    "customer_id": "C4",
+    "order_id": "O4",
+    "issue": "not_received",
+    "sku": null
+  },
+  "initial_state": {
+    "customers": {
+      "C4": {
+        "customer_id": "C4",
+        "name": "Synthetic Customer 4",
+        "tier": "regular"
+      }
+    },
+    "orders": {
+      "O4": {
+        "order_id": "O4",
+        "customer_id": "C4",
+        "status": "shipped",
+        "final_sale": false,
+        "items": [
+          {
+            "sku": "SKU-D",
+            "description": "Headphones",
+            "unit_price": "40.00",
+            "quantity": 1
+          }
+        ],
+        "total": "40.00",
+        "refunded_amount": "0.00"
+      }
+    },
+    "refunds": {},
+    "tickets": {
+      "TK4": {
+        "ticket_id": "TK4",
+        "customer_id": "C4",
+        "order_id": "O4",
+        "issue": "not_received",
+        "sku": null,
+        "status": "open",
+        "resolution": null,
+        "note": null
+      }
+    },
+    "policy_docs": {
+      "POL-REFUND-STD": {
+        "doc_id": "POL-REFUND-STD",
+        "title": "Refunds for damaged or defective items (current)",
+        "keywords": [
+          "damaged",
+          "defective",
+          "broken",
+          "refund",
+          "received"
+        ],
+        "archived": false,
+        "rules": {
+          "refund_limit": {
+            "regular": "100.00",
+            "gold": "250.00"
+          },
+          "refundable_statuses": [
+            "delivered"
+          ],
+          "final_sale_refundable": false
+        }
+      },
+      "POL-REFUND-2019": {
+        "doc_id": "POL-REFUND-2019",
+        "title": "Refunds for damaged items (2019, superseded)",
+        "keywords": [
+          "damaged",
+          "defective",
+          "broken",
+          "refund",
+          "received"
+        ],
+        "archived": true,
+        "rules": {
+          "refund_limit": {
+            "regular": "50.00",
+            "gold": "100.00"
+          },
+          "refundable_statuses": [
+            "delivered",
+            "shipped"
+          ],
+          "final_sale_refundable": true
+        }
+      },
+      "POL-SHIPPING": {
+        "doc_id": "POL-SHIPPING",
+        "title": "Shipping delays and tracking",
+        "keywords": [
+          "shipping",
+          "delay",
+          "late",
+          "tracking"
+        ],
+        "archived": false,
+        "rules": {
+          "refund_limit": {
+            "regular": "25.00",
+            "gold": "25.00"
+          },
+          "refundable_statuses": [
+            "shipped",
+            "delivered"
+          ],
+          "final_sale_refundable": false
+        }
+      }
+    },
+    "idempotency_log": {},
+    "audit": [],
+    "next_refund_number": 1
+  },
+  "expected": {
+    "refunds": [],
+    "ticket": {
+      "ticket_id": "TK4",
+      "status": "closed",
+      "resolution": "PENDING_DELIVERY"
+    }
+  }
+}

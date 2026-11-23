@@ -1,0 +1,157 @@
+{
+  "scenario_id": "T6",
+  "version": "1",
+  "title": "Multi-order customer",
+  "description": "Customer has two orders; the ticket concerns O6B (70.00) -> refund the right order.",
+  "split": "test",
+  "scope": "committed",
+  "max_steps": 12,
+  "task": {
+    "ticket_id": "TK6",
+    "customer_id": "C6",
+    "order_id": "O6B",
+    "issue": "damaged",
+    "sku": null
+  },
+  "initial_state": {
+    "customers": {
+      "C6": {
+        "customer_id": "C6",
+        "name": "Synthetic Customer 6",
+        "tier": "regular"
+      }
+    },
+    "orders": {
+      "O6A": {
+        "order_id": "O6A",
+        "customer_id": "C6",
+        "status": "delivered",
+        "final_sale": false,
+        "items": [
+          {
+            "sku": "SKU-F",
+            "description": "Office chair",
+            "unit_price": "120.00",
+            "quantity": 1
+          }
+        ],
+        "total": "120.00",
+        "refunded_amount": "0.00"
+      },
+      "O6B": {
+        "order_id": "O6B",
+        "customer_id": "C6",
+        "status": "delivered",
+        "final_sale": false,
+        "items": [
+          {
+            "sku": "SKU-G",
+            "description": "Notebook pack",
+            "unit_price": "35.00",
+            "quantity": 2
+          }
+        ],
+        "total": "70.00",
+        "refunded_amount": "0.00"
+      }
+    },
+    "refunds": {},
+    "tickets": {
+      "TK6": {
+        "ticket_id": "TK6",
+        "customer_id": "C6",
+        "order_id": "O6B",
+        "issue": "damaged",
+        "sku": null,
+        "status": "open",
+        "resolution": null,
+        "note": null
+      }
+    },
+    "policy_docs": {
+      "POL-REFUND-STD": {
+        "doc_id": "POL-REFUND-STD",
+        "title": "Refunds for damaged or defective items (current)",
+        "keywords": [
+          "damaged",
+          "defective",
+          "broken",
+          "refund",
+          "received"
+        ],
+        "archived": false,
+        "rules": {
+          "refund_limit": {
+            "regular": "100.00",
+            "gold": "250.00"
+          },
+          "refundable_statuses": [
+            "delivered"
+          ],
+          "final_sale_refundable": false
+        }
+      },
+      "POL-REFUND-2019": {
+        "doc_id": "POL-REFUND-2019",
+        "title": "Refunds for damaged items (2019, superseded)",
+        "keywords": [
+          "damaged",
+          "defective",
+          "broken",
+          "refund",
+          "received"
+        ],
+        "archived": true,
+        "rules": {
+          "refund_limit": {
+            "regular": "50.00",
+            "gold": "100.00"
+          },
+          "refundable_statuses": [
+            "delivered",
+            "shipped"
+          ],
+          "final_sale_refundable": true
+        }
+      },
+      "POL-SHIPPING": {
+        "doc_id": "POL-SHIPPING",
+        "title": "Shipping delays and tracking",
+        "keywords": [
+          "shipping",
+          "delay",
+          "late",
+          "tracking"
+        ],
+        "archived": false,
+        "rules": {
+          "refund_limit": {
+            "regular": "25.00",
+            "gold": "25.00"
+          },
+          "refundable_statuses": [
+            "shipped",
+            "delivered"
+          ],
+          "final_sale_refundable": false
+        }
+      }
+    },
+    "idempotency_log": {},
+    "audit": [],
+    "next_refund_number": 1
+  },
+  "expected": {
+    "refunds": [
+      {
+        "order_id": "O6B",
+        "amount": "70.00"
+      }
+    ],
+    "ticket": {
+      "ticket_id": "TK6",
+      "status": "closed",
+      "resolution": "REFUNDED"
+    }
+  }
+}

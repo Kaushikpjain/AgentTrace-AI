@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HYPOTHESIS_PROFILE: ci
+    steps:
+      # NOTE: pin these actions to full commit SHAs before the repository is made public.
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install Python 3.12
+        run: uv python install 3.12
+      - name: Install dependencies (locked)
+        run: uv sync --locked
+      - name: Ruff lint
+        run: uv run ruff check .
+      - name: Ruff format check
+        run: uv run ruff format --check .
+      - name: mypy (strict)
+        run: uv run mypy
+      - name: pytest with coverage
+        run: uv run pytest --cov=agenttrace --cov-report=term-missing
+      - name: CLI smoke test
+        run: |
+          uv run atrace scenarios
+          uv run atrace run T1 --no-save

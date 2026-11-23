@@ -1,0 +1,141 @@
+{
+  "scenario_id": "T8",
+  "version": "1",
+  "title": "Gold tier extended limit",
+  "description": "Gold-tier customer, 180.00 is within the 250.00 gold limit -> refund.",
+  "split": "test",
+  "scope": "stretch",
+  "max_steps": 12,
+  "task": {
+    "ticket_id": "TK8",
+    "customer_id": "C8",
+    "order_id": "O8",
+    "issue": "damaged",
+    "sku": null
+  },
+  "initial_state": {
+    "customers": {
+      "C8": {
+        "customer_id": "C8",
+        "name": "Synthetic Customer 8",
+        "tier": "gold"
+      }
+    },
+    "orders": {
+      "O8": {
+        "order_id": "O8",
+        "customer_id": "C8",
+        "status": "delivered",
+        "final_sale": false,
+        "items": [
+          {
+            "sku": "SKU-H",
+            "description": "Blender",
+            "unit_price": "180.00",
+            "quantity": 1
+          }
+        ],
+        "total": "180.00",
+        "refunded_amount": "0.00"
+      }
+    },
+    "refunds": {},
+    "tickets": {
+      "TK8": {
+        "ticket_id": "TK8",
+        "customer_id": "C8",
+        "order_id": "O8",
+        "issue": "damaged",
+        "sku": null,
+        "status": "open",
+        "resolution": null,
+        "note": null
+      }
+    },
+    "policy_docs": {
+      "POL-REFUND-STD": {
+        "doc_id": "POL-REFUND-STD",
+        "title": "Refunds for damaged or defective items (current)",
+        "keywords": [
+          "damaged",
+          "defective",
+          "broken",
+          "refund",
+          "received"
+        ],
+        "archived": false,
+        "rules": {
+          "refund_limit": {
+            "regular": "100.00",
+            "gold": "250.00"
+          },
+          "refundable_statuses": [
+            "delivered"
+          ],
+          "final_sale_refundable": false
+        }
+      },
+      "POL-REFUND-2019": {
+        "doc_id": "POL-REFUND-2019",
+        "title": "Refunds for damaged items (2019, superseded)",
+        "keywords": [
+          "damaged",
+          "defective",
+          "broken",
+          "refund",
+          "received"
+        ],
+        "archived": true,
+        "rules": {
+          "refund_limit": {
+            "regular": "50.00",
+            "gold": "100.00"
+          },
+          "refundable_statuses": [
+            "delivered",
+            "shipped"
+          ],
+          "final_sale_refundable": true
+        }
+      },
+      "POL-SHIPPING": {
+        "doc_id": "POL-SHIPPING",
+        "title": "Shipping delays and tracking",
+        "keywords": [
+          "shipping",
+          "delay",
+          "late",
+          "tracking"
+        ],
+        "archived": false,
+        "rules": {
+          "refund_limit": {
+            "regular": "25.00",
+            "gold": "25.00"
+          },
+          "refundable_statuses": [
+            "shipped",
+            "delivered"
+          ],
+          "final_sale_refundable": false
+        }
+      }
+    },
+    "idempotency_log": {},
+    "audit": [],
+    "next_refund_number": 1
+  },
+  "expected": {
+    "refunds": [
+      {
+        "order_id": "O8",
+        "amount": "180.00"
+      }
+    ],
+    "ticket": {
+      "ticket_id": "TK8",
+      "status": "closed",
+      "resolution": "REFUNDED"
+    }
+  }
+}

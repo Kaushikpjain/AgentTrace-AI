@@ -1,0 +1,136 @@
+{
+  "scenario_id": "T3",
+  "version": "1",
+  "title": "Final-sale item",
+  "description": "Damaged final-sale item; current policy disallows final-sale refunds -> deny.",
+  "split": "dev",
+  "scope": "committed",
+  "max_steps": 12,
+  "task": {
+    "ticket_id": "TK3",
+    "customer_id": "C3",
+    "order_id": "O3",
+    "issue": "damaged",
+    "sku": null
+  },
+  "initial_state": {
+    "customers": {
+      "C3": {
+        "customer_id": "C3",
+        "name": "Synthetic Customer 3",
+        "tier": "regular"
+      }
+    },
+    "orders": {
+      "O3": {
+        "order_id": "O3",
+        "customer_id": "C3",
+        "status": "delivered",
+        "final_sale": true,
+        "items": [
+          {
+            "sku": "SKU-C",
+            "description": "Clearance jacket",
+            "unit_price": "60.00",
+            "quantity": 1
+          }
+        ],
+        "total": "60.00",
+        "refunded_amount": "0.00"
+      }
+    },
+    "refunds": {},
+    "tickets": {
+      "TK3": {
+        "ticket_id": "TK3",
+        "customer_id": "C3",
+        "order_id": "O3",
+        "issue": "damaged",
+        "sku": null,
+        "status": "open",
+        "resolution": null,
+        "note": null
+      }
+    },
+    "policy_docs": {
+      "POL-REFUND-STD": {
+        "doc_id": "POL-REFUND-STD",
+        "title": "Refunds for damaged or defective items (current)",
+        "keywords": [
+          "damaged",
+          "defective",
+          "broken",
+          "refund",
+          "received"
+        ],
+        "archived": false,
+        "rules": {
+          "refund_limit": {
+            "regular": "100.00",
+            "gold": "250.00"
+          },
+          "refundable_statuses": [
+            "delivered"
+          ],
+          "final_sale_refundable": false
+        }
+      },
+      "POL-REFUND-2019": {
+        "doc_id": "POL-REFUND-2019",
+        "title": "Refunds for damaged items (2019, superseded)",
+        "keywords": [
+          "damaged",
+          "defective",
+          "broken",
+          "refund",
+          "received"
+        ],
+        "archived": true,
+        "rules": {
+          "refund_limit": {
+            "regular": "50.00",
+            "gold": "100.00"
+          },
+          "refundable_statuses": [
+            "delivered",
+            "shipped"
+          ],
+          "final_sale_refundable": true
+        }
+      },
+      "POL-SHIPPING": {
+        "doc_id": "POL-SHIPPING",
+        "title": "Shipping delays and tracking",
+        "keywords": [
+          "shipping",
+          "delay",
+          "late",
+          "tracking"
+        ],
+        "archived": false,
+        "rules": {
+          "refund_limit": {
+            "regular": "25.00",
+            "gold": "25.00"
+          },
+          "refundable_statuses": [
+            "shipped",
+            "delivered"
+          ],
+          "final_sale_refundable": false
+        }
+      }
+    },
+    "idempotency_log": {},
+    "audit": [],
+    "next_refund_number": 1
+  },
+  "expected": {
+    "refunds": [],
+    "ticket": {
+      "ticket_id": "TK3",
+      "status": "closed",
+      "resolution": "DENIED"
+    }
+  }
+}
