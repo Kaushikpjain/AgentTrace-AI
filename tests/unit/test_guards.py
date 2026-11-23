@@ -27,7 +27,7 @@ BANNED = {
     "multiprocessing",
     "agenttrace.trace.ids",
 }
-GUARDED_DIRS = ["env", "policies"]
+GUARDED_DIRS = ["env", "policies", "faults"]
 
 
 def _modules() -> list[Path]:

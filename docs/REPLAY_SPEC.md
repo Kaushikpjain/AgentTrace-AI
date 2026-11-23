@@ -2,7 +2,7 @@
 
 > This document is **authoritative for replay semantics**. Serialized field definitions are in `TRACE_SCHEMA.md`. Any behaviour change to recording or replay must be made here **before** it is made in code (TASKS.md rule).
 >
-> **Implementation status:** §3–§4 (lifecycles) and §5.1 (RECORD) are implemented in Week 1. §5.2–§5.4 and §6–§11 are specified here and scheduled for Weeks 2–3.
+> **Implementation status:** §3–§4 (lifecycles) and §5.1 (RECORD): Week 1. §5.2 (REPLAY_STRICT), §6 (cassette matching), §7 (divergence), §8 (config check), §11 (fidelity) and §13 (report): Week 2. §5.3–§5.4 and §10: Week 3.
 
 ## 1. Scope
 The contracts cover a single-agent, tool-using runtime whose external interactions all pass through one choke point, the **BoundaryGateway**. The MVP environment is an in-memory, deterministic, synthetic support/order system. Nothing in this spec permits calls to real external systems.
@@ -71,7 +71,11 @@ Decisions have **no state transition** (`state = null`).
    - (c) the delivered `response_fp` → else `DIVERGED(RESPONSE)`.
 5. At loop end: unconsumed entries → `DIVERGED(TRUNCATED)`. The final status and outcome must equal the recording's, else `DIVERGED(OUTCOME)`.
 
-**Never:** call the policy, fall back to live execution after a mismatch, or touch anything outside the sandbox copy.
+**Never:** call the policy, fall back to live execution after a mismatch, or touch anything outside the sandbox copy. The policy passed to the loop during strict replay is a guard object that raises if `decide` is called.
+
+**Fault plan availability:** if the header has a `fault_plan_hash` but no matching plan is available, or the plan uses an operator this code does not register, strict replay refuses with `CONFIG_MISMATCH` (it cannot re-apply the faults faithfully).
+
+**Known limit (decisions):** decisions are served from the cassette, not recomputed. A cassette whose *decision* payload was altered in a way that does not change any later tool request is therefore not detectable by replay itself. Such tampering is caught by the integrity chain at load time (TRACE_SCHEMA §7). Tool-side alterations (requests, raw results, state hashes, responses) are always detected by re-execution.
 
 **Guarantee for deterministic sandbox tools:** the original final state hash and oracle outcome are reproduced, or a divergence is reported at the first differing event.
 
@@ -175,8 +179,18 @@ Each metric is reported separately:
 
 These are requirements verified by tests, not claims.
 
-## 12. Test mapping
+## 12. Replay report (Week 2 API: `agenttrace.replay.exact`)
+A strict replay returns a `ReplayReport`:
+- `verdict` ∈ `VERIFIED` (no divergence; all of I1 holds), `DIVERGED`, `CONFIG_MISMATCH` (refused before execution, with the list of mismatching components), `INTEGRITY_ERROR` (the recording failed TRACE_SCHEMA §7 validation, so nothing was replayed);
+- the replay `RunRecord` (mode `REPLAY_STRICT`, `parent_run_id` = original), when executed;
+- the first `divergence`, if any;
+- the fidelity report (§11), computed positionally over boundary events;
+- `policy_calls` (must be 0).
+
+CLI: `atrace replay <run_id> [--policy vN] [--runs-dir DIR] [--save]`. Exit codes: 0 VERIFIED, 1 DIVERGED, 3 CONFIG_MISMATCH, 4 INTEGRITY_ERROR, 2 usage/not found.
+
+## 13. Test mapping
 Acceptance tests #1–#21 are defined in PLAN_v0.2.1 §13 and TEST_PLAN.md §4:
-- #1–#10, #15, #16, #21 → §5.2
+- #1–#10, #15, #16, #21 → §5.2 (`tests/acceptance/test_replay_matrix.py`). Note for #5: with the check order of §5.2 step 4, a changed tool implementation surfaces first as `RAW_RESULT` (the raw result differs before the delivered response is compared).
 - #11–#13, #17–#19 → §5.3 / §10
 - #14, #20 → §5.4

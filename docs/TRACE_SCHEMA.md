@@ -9,10 +9,11 @@ runs/<run_id>/
   header.json     RunHeader           (observable)
   events.jsonl    one Event per line   (observable, ordered by seq)
   ledger.jsonl    one LedgerEntry per boundary event (PRIVILEGED: replay engine and benchmark validator only)
+  fault_plan.json FaultPlan           (PRIVILEGED; present iff header.fault_plan_hash is not null)
   footer.json     RunFooter           (observable; presence marks a complete recording)
 ```
 - **Write protocol:** files are written into `runs/.tmp-<run_id>-<random>/`, fsynced, and then the directory is atomically renamed to `runs/<run_id>/`. If the target exists, the write fails (recordings are immutable). Hidden `.tmp-*` directories are ignored by readers.
-- **Readers:** `load_trace(run_id)` returns `Trace(header, events, footer)` (no ledger). `load_ledger(run_id)` returns the ledger and is privileged by convention (localizer code must not call it; this is test-enforced from Week 3).
+- **Readers:** `load_trace(run_id)` returns `Trace(header, events, footer)` (no ledger, no fault plan). `load_ledger(run_id)`, `load_fault_plan(run_id)` and `load_record(run_id)` are privileged by convention: localizer code must not call them (test-enforced from Week 3).
 
 ## 2. Enumerations
 | Enum | Values |
@@ -89,6 +90,29 @@ All models use `extra="forbid"` and are frozen. `Json` means a JSON-pure value: 
 ### FaultApplication
 `fault_id: str`, `operator: str`, `stage: FaultStage`, `effect: FaultEffect`, `input_fp: str?`, `output_fp: str`.
 
+### FaultPlan (privileged; schema `1.0`)
+| Field | Type | Notes |
+|---|---|---|
+| `schema_version` | str | `"1.0"` |
+| `plan_id` | str | free-form label |
+| `faults` | list[FaultSpec] | applied in list order when several match |
+
+**FaultSpec:** `fault_id` (unique in the plan), `operator` (registered name, §3.1), `stage` (FaultStage; must equal the operator's declared stage), `trigger`, `params` (Json object).
+
+**FaultTrigger:** `boundary` (`TOOL` or `DECISION`), `name` (tool name for `TOOL`; null for `DECISION`), `occurrence` (≥1: the n-th call of that tool, or the n-th decision, in the run).
+
+`fault_plan_hash = fp(FaultPlan)`. A plan is part of the run's configuration (it enters `config_fingerprint`), and strict replay re-applies it (REPLAY_SPEC §5.2).
+
+### 3.1 Registered fault operators (Week 2)
+| Operator | Stage | Params | Effect |
+|---|---|---|---|
+| `TIMEOUT_BEFORE_EXECUTION` (T0) | PRE_EXECUTION | `message?` | prevents execution; delivers TIMEOUT |
+| `LOST_ACK` (F5) | POST_EXECUTION | `message?` | execution and commit happen; delivers TIMEOUT |
+| `CORRUPT_OUTPUT` (F3) | POST_EXECUTION | `path` (list of keys/indices into the delivered response), `value` (Json) | replaces the value at `path`; no-op (and no application recorded) if the path does not exist |
+| `REPLACE_DECISION` | DECISION | `decision` (a Decision object) | delivers the given decision instead of the raw one |
+
+F1, F2, F4 and D1 are added in Week 3.
+
 ### RunFooter
 | Field | Type |
 |---|---|
@@ -129,8 +153,9 @@ All models use `extra="forbid"` and are frozen. `Json` means a JSON-pure value: 
 3. Events: `run_id` equals the header; `seq` is contiguous from 0; parent ids refer to earlier `AGENT_STEP` events; each `request_fp`/`response_fp` matches its payload; each StateTransition satisfies its constraint.
 4. Ledger: one entry per DECISION/TOOL event, with the same seq and boundary.
 5. `config_fingerprint` matches the recomputation from header fields.
-6. **Hash chain:** `c₀ = sha256("agenttrace-chain-v1")`; for each event, then each ledger entry: `cᵢ = sha256(cᵢ₋₁ ‖ canonical_bytes(record))`. `integrity.chain_root = hex(c_last)`, and `event_count`/`ledger_count` must match. A mismatch → `TraceIntegrityError`.
-7. Size guard: any single file over 64 MiB → `CorruptTraceError` (no pathological inputs).
+6. **Hash chain:** `c₀ = sha256("agenttrace-chain-v1")`; then the **header**, each event, then each ledger entry: `cᵢ = sha256(cᵢ₋₁ ‖ canonical_bytes(record))`. `integrity.chain_root = hex(c_last)`, and `event_count`/`ledger_count` must match. A mismatch → `TraceIntegrityError`. Because the header carries `fault_plan_hash`, the fault plan is covered transitively. The footer is not chained (it holds the root itself); its outcome is independently re-derived by strict replay.
+7. **Fault plan:** `fault_plan.json` must exist iff `header.fault_plan_hash` is non-null (missing → `CorruptTraceError`; unexpected → `TraceIntegrityError`), and `fp(plan)` must equal the header hash (→ `TraceIntegrityError`).
+8. Size guard: any single file over 64 MiB → `CorruptTraceError` (no pathological inputs).
 
 The chain detects accidental corruption and truncation. **It is not a security control** against a party who can rewrite every file.
 

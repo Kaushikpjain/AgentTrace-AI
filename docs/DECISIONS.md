@@ -17,6 +17,9 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 | 011 | Scenario templates shipped as package data | Accepted |
 | 012 | Config fingerprint includes policy/tool source hashes | Accepted |
 | 013 | Decimal-only money; canonical JSON with normalized Decimals; floats rejected | Accepted |
+| 014 | FaultPlan as part of the trace contract; pulled into Week 2 | Accepted |
+| 015 | Header included in the integrity hash chain | Accepted |
+| 016 | Strict replay serves decisions and re-executes tools; verdicts and exit codes | Accepted |
 
 ---
 
@@ -86,3 +89,17 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
   - Keys are sorted, with compact separators, UTF-8, and strings NFC-normalized.
   - Event payloads are converted to JSON-pure values at record time, so stored and reloaded events are equal.
 - **Trade-offs:** stored money strings lose trailing zeros (`"80"`). Readability suffers a little in exchange for semantic equality.
+
+## ADR-014: FaultPlan as part of the trace contract (Week 2)
+- **Context:** strict replay must re-apply the faults of a recorded run (tests #9, #16, #21). Ad-hoc Python hooks cannot be reconstructed from a recording.
+- **Decision:** a versioned, serializable `FaultPlan` (TRACE_SCHEMA §3) is stored as privileged `fault_plan.json`; its fingerprint is `header.fault_plan_hash` and enters the config fingerprint. `PlanFaultHook` is stateless (matches on gateway-provided occurrences), so RECORD and REPLAY behave identically. Operators are registered with a declared stage; unknown operators or stage mismatches are rejected (`FaultPlanError`). T0, F3, F5 and `REPLACE_DECISION` were pulled forward from Week 3; F1, F2, F4 and D1 remain Week 3.
+- **Trade-offs:** `RunRecord` now requires a matching plan whenever the header has a fault-plan hash, so arbitrary Python hooks can no longer produce records (they remain usable for gateway-level unit tests).
+
+## ADR-015: Header in the hash chain
+- **Context:** the Week 1 chain covered events and ledger only; a self-consistent header edit (e.g. a different fault-plan hash with a recomputed config fingerprint) would pass load validation.
+- **Decision:** the chain now starts with the canonical header. The fault plan is covered transitively via `fault_plan_hash`. The footer remains unchained (it holds the root); strict replay re-derives its status, outcome and final state.
+- **Trade-offs:** recordings written before this change fail integrity checks. None were kept (pre-release).
+
+## ADR-016: Strict replay semantics, verdicts and exit codes
+- **Decision:** strict replay serves decisions from the cassette (the policy is replaced by a guard that raises on use) and re-executes sandbox tools, verifying raw result + fault applications, then state transition, then delivered response. The result is a `ReplayReport` with verdict `VERIFIED` / `DIVERGED` / `CONFIG_MISMATCH` / `INTEGRITY_ERROR`. `atrace replay` exits 0 / 1 / 3 / 4 respectively (2 = usage / not found).
+- **Known limit:** a decision payload altered without affecting later tool requests cannot be detected by replay alone; the integrity chain catches it at load (REPLAY_SPEC §5.2).

@@ -20,19 +20,20 @@ Rules:
 | W1.G | Week 1 quality gates 1–12 (TEST_PLAN §8) | P0 | all W1 | (debug budget) | all gates evidenced | DONE |
 
 ## Week 2: Record / exact replay (committed 14 h)
+Also pulled forward from W3.1 (needed by strict replay, approved 2026-11-23): versioned serializable `FaultPlan`, `fault_plan.json`, `PlanFaultHook`, operators T0/F3/F5/`REPLACE_DECISION`, `atrace run --fault-plan`.
 | ID | Description | Priority | Depends on | Est. h | Acceptance criteria | Status |
 |---|---|---|---|---|---|---|
-| W2.1 | Cassette (positional, consume-once, full-key) + config fingerprint check | P0 | W1 | 2.0 | unit tests | TODO |
-| W2.2 | ExactReplayer (lifecycle re-application, fault-plan replay, state/raw/response verification, divergence kinds) | P0 | W2.1 | 4.0 | #1–#10 pass | TODO |
-| W2.3 | Fidelity report | P1 | W2.2 | 1.0 | report fields tested | TODO |
-| W2.4 | CLI `replay`; `show` state transitions | P1 | W2.2 | 1.0 | CLI tests | TODO |
-| W2.5 | Acceptance #1–#10, #15, #16, #21 + P1, P4 | P0 | W2.2 | 5.0 | all pass | TODO |
-| W2.6 | REPLAY_SPEC review vs. implementation | P1 | W2.5 | 1.0 | spec updated, no contradictions | TODO |
+| W2.1 | Cassette (positional, consume-once, full-key) + config fingerprint check | P0 | W1 | 2.0 | unit tests | DONE |
+| W2.2 | ExactReplayer (lifecycle re-application, fault-plan replay, state/raw/response verification, divergence kinds) | P0 | W2.1 | 4.0 | #1–#10 pass | DONE |
+| W2.3 | Fidelity report | P1 | W2.2 | 1.0 | report fields tested | DONE |
+| W2.4 | CLI `replay`; `show` state transitions | P1 | W2.2 | 1.0 | CLI tests | DONE |
+| W2.5 | Acceptance #1–#10, #15, #16, #21 + P1, P4 | P0 | W2.2 | 5.0 | all pass | DONE |
+| W2.6 | REPLAY_SPEC review vs. implementation | P1 | W2.5 | 1.0 | spec updated, no contradictions | DONE |
 
 ## Week 3: Faults, counterfactuals, regression, localization (committed 14 h)
 | ID | Description | Priority | Depends on | Est. h | Acceptance criteria | Status |
 |---|---|---|---|---|---|---|
-| W3.1 | Fault layer: F1–F5, D1, T0 fixture; FaultPlan; ledger applications; labels | P0 | W2 | 3.0 | stage declared and verified per operator | TODO |
+| W3.1 | Fault layer: remaining operators F1, F2, F4, D1 (FaultPlan, T0, F3 `CORRUPT_OUTPUT`, F5 `LOST_ACK`, `REPLACE_DECISION` already done in Week 2); labels sidecar | P0 | W2 | 2.0 | stage declared and verified per operator | TODO |
 | W3.2 | Benchmark generator + label validation + splits | P0 | W3.1 | 2.5 | CAUSAL/MASKED validated; ≥8 delayed-effect | TODO |
 | W3.3 | CounterfactualRunner: both types, UNSUPPORTED, fence, same-type placebo | P0 | W2 | 4.0 | #11–#13, #17–#19 pass | TODO |
 | W3.4 | RegressionRunner + fixtures | P0 | W2 | 1.5 | #14, #20 pass | TODO |
@@ -66,3 +67,9 @@ Phase 2A local LLM policy · Phase 2B LangGraph adapter · Phase 2C FastAPI + Re
 | 2026-11-23 | CI YAML parsed with PyYAML (`uv run --with pyyaml`) | 1 job, 9 steps (not yet executed on GitHub) |
 | 2026-11-23 | `/usr/bin/time -l atrace run T1 --no-save` | max RSS 39,583,744 bytes (~40 MB), 0.24 s |
 | 2026-11-23 | `/usr/bin/time -l python -m pytest -q` | max RSS 63,455,232 bytes (~63 MB), 1.16 s |
+| 2026-11-23 (W2) | baseline before Week 2: ruff, mypy, `HYPOTHESIS_PROFILE=ci pytest --cov` | clean; 167 passed; 95% |
+| 2026-11-23 (W2) | `uv run ruff check .` / `ruff format --check .` / `mypy` (37 files) | all clean |
+| 2026-11-23 (W2) | `HYPOTHESIS_PROFILE=ci uv run pytest --cov=agenttrace` | 236 passed (incl. import guards extended to `faults/`); total coverage 96% (replay/exact.py 95%, cassette 97%, fidelity 100%) |
+| 2026-11-23 (W2) | fidelity sweep: 8 templates × {v1, v2} × {none, lost_ack, pre_exec timeout, corrupt total} recorded then strictly replayed | 64/64 VERIFIED, 64/64 fidelity exact, 660 boundary events, 0 policy calls (recorded outcomes: 52 PASS / 12 FAIL) |
+| 2026-11-23 (W2) | `/usr/bin/time -l atrace replay <lost-ack run>` | VERIFIED; max RSS 39,993,344 bytes (~40 MB), 0.16 s |
+| 2026-11-23 (W2) | `atrace replay <v2 run> --policy v1` | CONFIG_MISMATCH, exit 3 |

@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "plan_id": "corrupt-output",
+  "faults": [
+    {
+      "fault_id": "corrupt_output-get_order-1",
+      "operator": "CORRUPT_OUTPUT",
+      "stage": "POST_EXECUTION",
+      "trigger": {
+        "boundary": "TOOL",
+        "name": "get_order",
+        "occurrence": 1
+      },
+      "params": {
+        "path": [
+          "data",
+          "total"
+        ],
+        "value": "800.00"
+      }
+    }
+  ]
+}

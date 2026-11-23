@@ -13,9 +13,9 @@ A **modular monolith** (ADR-002): one Python package `agenttrace`, a CLI, no ser
 | `agenttrace.runtime` | `BoundaryGateway` (S1–S7 tool lifecycle, D1–D4 decision lifecycle, fault-hook seam), `AgentLoop`, `Policy`/`FaultHook` protocols, run assembly | Week 1 |
 | `agenttrace.policies` | `ScriptedSupportPolicy` v1/v2, `ReferencePolicy` interface + gold reference | Week 1 |
 | `agenttrace.evals` | Deterministic oracle (Week 1); validators (Week 3) | Week 1 / 3 |
-| `agenttrace.cli` | `atrace scenarios`, `run`, `show` (Week 1); `replay`, `intervene`, `regress`, `inject`, `investigate`, `bench` (later) | Week 1+ |
-| `agenttrace.replay` | Cassette, ExactReplayer, CounterfactualRunner, RegressionRunner, fidelity | Weeks 2–3 |
-| `agenttrace.faults` | Stage-declared fault operators, FaultPlan, labels | Week 3 |
+| `agenttrace.cli` | `atrace scenarios`, `run [--fault-plan]`, `show` (Week 1); `replay` (Week 2); `intervene`, `regress`, `investigate`, `bench` (later) | Week 1–2 |
+| `agenttrace.replay` | `Cassette` (positional, consume-once, fence), `StrictReplayGateway`, `replay_strict`/`replay_run`, config check, fidelity (Week 2); CounterfactualRunner, RegressionRunner (Week 3) | Week 2 |
+| `agenttrace.faults` | Registered stage-declared operators (T0, F3, F5, `REPLACE_DECISION` in Week 2; F1, F2, F4, D1 in Week 3), `PlanFaultHook`, `validate_plan` | Week 2–3 |
 | `agenttrace.localize` | Baselines B1/B3/B4, CF localizer | Week 3 |
 | `agenttrace.bench` / `report` | Generator, validator, metrics A/B/C, reports | Weeks 3–4 |
 
@@ -29,7 +29,8 @@ cli ─▶ bench/report ─▶ localize ─▶ replay ─▶ runtime ─▶ poli
 - `env` imports only `trace` (canonical/fingerprints).
 - `policies` imports `runtime.types` (Decision/Observation) and `env.support` models; `runtime` never imports `policies` (the `Policy` protocol lives in `runtime.types`).
 - `runtime` imports `trace` and `env.base`/`env.delta` (environment-agnostic), never the CLI or a concrete environment.
-- `runner.py` is the only module that wires the concrete support environment, oracle and policies together.
+- `runner.py` is the only module that wires the concrete support environment, oracle and policies together. It also builds the support `ReplayContext` consumed by the environment-agnostic replay engine.
+- `replay` depends on `runtime` (it subclasses `BoundaryGateway` through the `_produce_decision` / `_before_tool` / `_after_tool` / `finish` seams) and never on a concrete environment.
 - `localize` must never import the ledger/label loaders (C3; test-enforced from Week 3).
 - `env/` and `policies/` must not import nondeterministic or I/O modules (`random`, `time`, `uuid`, `datetime`, `secrets`, `subprocess`, `socket`, HTTP clients). This is test-enforced from Week 1.
 
@@ -44,6 +45,20 @@ AgentLoop: for each step ─▶ AGENT_STEP span event                   │
                                   ─ S4 commit/rollback ─ S5 post-faults ─ S6 deliver ─ S7 record
    history.append(Observation(seq, tool, args, delivered response))
 Oracle(final state) ─▶ outcome ─▶ RunFooter (+ integrity chain) ─▶ JsonlTraceStore.save (atomic)
+```
+
+## 4b. Data flow (Week 2, REPLAY_STRICT)
+```
+store.load_record (schema + fingerprints + hash chain + fault-plan hash) ─▶ RunRecord
+check_config(header, fault_plan, ReplayContext)  ── mismatch ─▶ CONFIG_MISMATCH (nothing executed)
+build_episode(header, plan) ─▶ fresh initial state + PlanFaultHook(plan)
+run_episode(mode=REPLAY_STRICT, policy=ReplayPolicyGuard, gateway=StrictReplayGateway(cassette))
+   decisions: cassette.expect(seq, DECISION, request_fp) ─▶ recorded delivered decision (policy never called)
+   tools:     cassette.expect(seq, TOOL, name, request_fp) ─▶ re-run S1–S7 with the plan
+              ─▶ verify raw result/fault applications, state transition, delivered response
+   first mismatch ─▶ DivergenceDetected ─▶ status DIVERGED, outcome NOT_EVALUATED
+   loop end: unconsumed entries ─▶ TRUNCATED; then final state hash + outcome compared
+ReplayReport(verdict, divergence, fidelity, policy_calls, cassette consumed/entries)
 ```
 
 ## 5. Execution lifecycle and state ownership
@@ -78,10 +93,13 @@ src/agenttrace/
   env/       base.py (ToolSpec/ToolResult contract)  delta.py (JSON diff)
   env/support/  models.py  tools.py  snapshot.py  scenario.py  scenarios/T1..T8.json
   runtime/   types.py (Decision, ToolResponse, Observation, Policy)  faults.py (FaultHook)
-             gateway.py (S1–S7, D1–D4)  loop.py (run_episode)
+             gateway.py (S1–S7, D1–D4, replay seams, DivergenceDetected)  loop.py (run_episode)
+  faults/    operators.py (registered operators)  plan.py (PlanFaultHook, validate_plan)
+  replay/    cassette.py  exact.py (strict replay, config check, report)  fidelity.py
   policies/  support_scripted.py (v1, v2)  reference.py (ReferencePolicy, gold reference)
   evals/     oracle.py
-tests/       unit/  integration/  helpers.py  hooks.py (test-only fault hooks)  conftest.py
+tests/       unit/  integration/  acceptance/  property/  helpers.py  hooks.py  plans.py  replay_helpers.py  conftest.py
+examples/fault_plans/  lost_ack_refund.json  timeout_before_refund.json  corrupt_order_total.json
 benchmarks/  (Week 3: generated fault instances, labels, splits)
 .github/workflows/ci.yml
 ```

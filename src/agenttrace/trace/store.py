@@ -22,6 +22,7 @@ from agenttrace.trace.integrity import compute_chain_root
 from agenttrace.trace.schema import (
     Boundary,
     Event,
+    FaultPlan,
     LedgerEntry,
     RunFooter,
     RunHeader,
@@ -38,6 +39,7 @@ HEADER_FILE = "header.json"
 EVENTS_FILE = "events.jsonl"
 LEDGER_FILE = "ledger.jsonl"
 FOOTER_FILE = "footer.json"
+FAULT_PLAN_FILE = "fault_plan.json"
 
 
 class TraceStoreError(Exception):
@@ -75,6 +77,10 @@ class TraceStore(Protocol):
 
     def load_ledger(self, run_id: str) -> tuple[LedgerEntry, ...]: ...
 
+    def load_fault_plan(self, run_id: str) -> FaultPlan | None: ...
+
+    def load_record(self, run_id: str) -> RunRecord: ...
+
     def list_run_ids(self) -> list[str]: ...
 
     def exists(self, run_id: str) -> bool: ...
@@ -104,7 +110,7 @@ def validate_record(record: RunRecord) -> None:
     integrity = footer.integrity
     if integrity.event_count != len(events) or integrity.ledger_count != len(ledger):
         raise TraceIntegrityError("integrity counts do not match the recording")
-    if integrity.chain_root != compute_chain_root(events, ledger):
+    if integrity.chain_root != compute_chain_root(header, events, ledger):
         raise TraceIntegrityError("hash chain mismatch: recording was modified or truncated")
 
 
@@ -184,6 +190,8 @@ class JsonlTraceStore:
             self._write(tmp / HEADER_FILE, canonical_bytes(record.header))
             self._write(tmp / EVENTS_FILE, b"".join(self._line(e) for e in record.events))
             self._write(tmp / LEDGER_FILE, b"".join(self._line(e) for e in record.ledger))
+            if record.fault_plan is not None:
+                self._write(tmp / FAULT_PLAN_FILE, canonical_bytes(record.fault_plan))
             self._write(tmp / FOOTER_FILE, canonical_bytes(record.footer))
             os.rename(tmp, final)
         except BaseException:
@@ -217,7 +225,23 @@ class JsonlTraceStore:
             for lineno, data in self._parse_lines(run_dir / LEDGER_FILE)
         )
         footer = self._validate(RunFooter, self._parse_doc(run_dir / FOOTER_FILE), FOOTER_FILE)
-        record = RunRecord(header=header, events=events, ledger=ledger, footer=footer)
+        plan_path = run_dir / FAULT_PLAN_FILE
+        fault_plan: FaultPlan | None = None
+        if header.fault_plan_hash is None:
+            if plan_path.exists():
+                raise TraceIntegrityError(f"run {run_id}: unexpected {FAULT_PLAN_FILE}")
+        else:
+            if not plan_path.is_file():
+                raise CorruptTraceError(f"run {run_id}: missing {FAULT_PLAN_FILE}")
+            fault_plan = self._validate(FaultPlan, self._parse_doc(plan_path), FAULT_PLAN_FILE)
+        try:
+            record = RunRecord(
+                header=header, events=events, ledger=ledger, footer=footer, fault_plan=fault_plan
+            )
+        except ValidationError as exc:
+            raise TraceIntegrityError(
+                f"run {run_id}: {FAULT_PLAN_FILE} does not match header"
+            ) from exc
         if header.run_id != run_id:
             raise TraceIntegrityError(f"header run_id {header.run_id!r} != directory {run_id!r}")
         validate_record(record)
@@ -231,6 +255,10 @@ class JsonlTraceStore:
         """PRIVILEGED: replay engine and benchmark validator only (ADR-009)."""
         return self._load_record(run_id).ledger
 
+    def load_fault_plan(self, run_id: str) -> FaultPlan | None:
+        """PRIVILEGED: replay engine and benchmark validator only."""
+        return self._load_record(run_id).fault_plan
+
     def load_record(self, run_id: str) -> RunRecord:
-        """PRIVILEGED: full record including the ledger (replay engine only)."""
+        """PRIVILEGED: full record including the ledger and fault plan (replay engine only)."""
         return self._load_record(run_id)

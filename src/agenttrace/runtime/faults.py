@@ -18,6 +18,7 @@ from agenttrace.trace.schema import FaultApplication
 class DecisionContext:
     seq: int
     step_index: int
+    occurrence: int  # 1-based count of decisions in the run
 
 
 @dataclass(frozen=True)

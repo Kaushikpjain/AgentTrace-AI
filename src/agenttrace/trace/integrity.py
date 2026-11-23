@@ -9,13 +9,16 @@ import hashlib
 from collections.abc import Iterable
 
 from agenttrace.trace.canonical import canonical_bytes
-from agenttrace.trace.schema import Event, LedgerEntry
+from agenttrace.trace.schema import Event, LedgerEntry, RunHeader
 
 _CHAIN_SEED = b"agenttrace-chain-v1"
 
 
-def compute_chain_root(events: Iterable[Event], ledger: Iterable[LedgerEntry]) -> str:
+def compute_chain_root(
+    header: RunHeader, events: Iterable[Event], ledger: Iterable[LedgerEntry]
+) -> str:
+    """Chain over the header, then each event, then each ledger entry."""
     digest = hashlib.sha256(_CHAIN_SEED).digest()
-    for record in (*events, *ledger):
+    for record in (header, *events, *ledger):
         digest = hashlib.sha256(digest + canonical_bytes(record)).digest()
     return digest.hex()

@@ -21,6 +21,7 @@ from agenttrace.trace.fingerprint import fingerprint
 from agenttrace.trace.ids import new_span_id
 from agenttrace.trace.schema import (
     Boundary,
+    Divergence,
     Event,
     EventStatus,
     FaultApplication,
@@ -31,6 +32,14 @@ from agenttrace.trace.schema import (
 
 class ReadOnlyToolMutatedState(RuntimeError):
     """A tool declared read-only changed its working copy (programming error; aborts the run)."""
+
+
+class DivergenceDetected(Exception):
+    """Raised by replaying gateways to end the run at the first divergence (fail closed)."""
+
+    def __init__(self, divergence: Divergence) -> None:
+        super().__init__(f"{divergence.kind} at seq {divergence.seq}: {divergence.detail}")
+        self.divergence = divergence
 
 
 def _validation_message(exc: ValidationError) -> str:
@@ -121,15 +130,18 @@ class BoundaryGateway[S: BaseModel]:
         step_index: int,
         parent_span_id: str,
     ) -> Decision:
-        seq, key, _ = self._next(Boundary.DECISION, "decide", step_index)
+        seq, key, occurrence = self._next(Boundary.DECISION, "decide", step_index)
         request = {
             "policy_id": policy.policy_id,
             "policy_version": policy.policy_version,
             "history_fp": fingerprint([_dump(obs) for obs in history]),
         }
-        raw = policy.decide(task, history)  # D1
-        delivered, applications = self._hook.on_decision(  # D2
-            DecisionContext(seq=seq, step_index=step_index), raw
+        raw, delivered, applications = self._produce_decision(
+            DecisionContext(seq=seq, step_index=step_index, occurrence=occurrence),
+            fingerprint(request),
+            policy,
+            task,
+            history,
         )
         raw_json, delivered_json = _dump(raw), _dump(delivered)
         self._events.append(  # D4 (observable)
@@ -160,6 +172,29 @@ class BoundaryGateway[S: BaseModel]:
         )
         return delivered  # D3
 
+    def _produce_decision[T: BaseModel](
+        self,
+        ctx: DecisionContext,
+        request_fp: str,
+        policy: Policy[T],
+        task: T,
+        history: Sequence[Observation],
+    ) -> tuple[Decision, Decision, list[FaultApplication]]:
+        """D1-D2: (raw, delivered, fault applications). Replaying gateways override this."""
+        raw = policy.decide(task, history)  # D1
+        delivered, applications = self._hook.on_decision(ctx, raw)  # D2
+        return raw, delivered, list(applications)
+
+    # ------------------------------------------------------------------ replay seams
+    def _before_tool(self, seq: int, name: str, request_fp: str) -> None:
+        """Called after the request is formed and before any execution (no-op in RECORD)."""
+
+    def _after_tool(self, event: Event, entry: LedgerEntry) -> None:
+        """Called after the event and ledger entry are recorded (no-op in RECORD)."""
+
+    def finish(self) -> None:
+        """Called when the agent loop ends normally (no-op in RECORD)."""
+
     # ------------------------------------------------------------------ S1-S7
     def call_tool(
         self, decision: Decision, *, step_index: int, parent_span_id: str
@@ -171,6 +206,7 @@ class BoundaryGateway[S: BaseModel]:
         seq, key, occurrence = self._next(Boundary.TOOL, name, step_index)
         request = {"tool": name, "args": args}
         request_fp = fingerprint(request)
+        self._before_tool(seq, name, request_fp)
         self._request_counts[request_fp] += 1
         attempt = self._request_counts[request_fp]
         ctx = ToolContext(
@@ -232,38 +268,37 @@ class BoundaryGateway[S: BaseModel]:
         delivered_json = _dump(delivered)
         raw_json = _dump(raw) if raw is not None else None
 
-        self._events.append(  # S6/S7 (observable)
-            Event(
-                span_id=new_span_id(),
-                parent_span_id=parent_span_id,
-                run_id=self._run_id,
-                seq=seq,
-                step_index=step_index,
-                logical_key=key,
-                boundary=Boundary.TOOL,
-                name=name,
-                status=delivered.status,
-                request=request,
-                request_fp=request_fp,
-                response=delivered_json,
-                response_fp=fingerprint(delivered_json),
-                state=StateTransition(
-                    before_hash=before_hash,
-                    after_hash=after_hash,
-                    committed=committed,
-                    delta=tuple(delta),
-                ),
-                attempt=attempt,
-            )
+        event = Event(
+            span_id=new_span_id(),
+            parent_span_id=parent_span_id,
+            run_id=self._run_id,
+            seq=seq,
+            step_index=step_index,
+            logical_key=key,
+            boundary=Boundary.TOOL,
+            name=name,
+            status=delivered.status,
+            request=request,
+            request_fp=request_fp,
+            response=delivered_json,
+            response_fp=fingerprint(delivered_json),
+            state=StateTransition(
+                before_hash=before_hash,
+                after_hash=after_hash,
+                committed=committed,
+                delta=tuple(delta),
+            ),
+            attempt=attempt,
         )
-        self._ledger.append(  # S7 (privileged)
-            LedgerEntry(
-                seq=seq,
-                boundary=Boundary.TOOL,
-                executed=executed,
-                raw_output=raw_json,
-                raw_output_fp=fingerprint(raw_json) if raw_json is not None else None,
-                fault_applications=tuple(applications),
-            )
+        entry = LedgerEntry(
+            seq=seq,
+            boundary=Boundary.TOOL,
+            executed=executed,
+            raw_output=raw_json,
+            raw_output_fp=fingerprint(raw_json) if raw_json is not None else None,
+            fault_applications=tuple(applications),
         )
+        self._events.append(event)  # S6/S7 (observable)
+        self._ledger.append(entry)  # S7 (privileged)
+        self._after_tool(event, entry)
         return delivered

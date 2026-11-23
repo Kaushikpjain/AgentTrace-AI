@@ -19,7 +19,7 @@ from agenttrace.policies.support_scripted import ScriptedSupportPolicy
 from agenttrace.runner import record_scenario
 from agenttrace.runtime.types import Decision
 from agenttrace.trace.schema import Boundary, EventStatus, Outcome, RunStatus
-from tests.hooks import LostAck, PreExecutionTimeout, RewriteDecision
+from tests import plans
 
 
 def _tool_sequence(record) -> list[str]:  # type: ignore[no-untyped-def]
@@ -49,9 +49,7 @@ def test_v2_uses_idempotency_key_v1_does_not() -> None:
 
 
 def test_lost_ack_v1_duplicates_refund_and_fails_oracle() -> None:
-    record = record_scenario(
-        load_scenario("T1"), policy_version="v1", fault_hook=LostAck("issue_refund")
-    )
+    record = record_scenario(load_scenario("T1"), policy_version="v1", fault_plan=plans.lost_ack())
     assert _tool_sequence(record).count("issue_refund") == 2
     clauses = {c.clause_id for c in record.footer.outcome.violated_clauses}
     assert record.footer.outcome.outcome is Outcome.FAIL
@@ -59,9 +57,7 @@ def test_lost_ack_v1_duplicates_refund_and_fails_oracle() -> None:
 
 
 def test_lost_ack_v2_idempotent_retry_passes() -> None:
-    record = record_scenario(
-        load_scenario("T1"), policy_version="v2", fault_hook=LostAck("issue_refund")
-    )
+    record = record_scenario(load_scenario("T1"), policy_version="v2", fault_plan=plans.lost_ack())
     refunds = [e for e in record.events if e.name == "issue_refund"]
     assert [e.status for e in refunds] == [EventStatus.TIMEOUT, EventStatus.OK]
     assert refunds[0].state.committed and not refunds[1].state.committed  # type: ignore[union-attr]
@@ -70,7 +66,7 @@ def test_lost_ack_v2_idempotent_retry_passes() -> None:
 
 def test_pre_execution_timeout_v1_retry_passes() -> None:
     record = record_scenario(
-        load_scenario("T1"), policy_version="v1", fault_hook=PreExecutionTimeout("issue_refund")
+        load_scenario("T1"), policy_version="v1", fault_plan=plans.pre_execution_timeout()
     )
     refunds = [e for e in record.events if e.name == "issue_refund"]
     assert not refunds[0].state.committed and refunds[1].state.committed  # type: ignore[union-attr]
@@ -78,14 +74,14 @@ def test_pre_execution_timeout_v1_retry_passes() -> None:
 
 
 def test_decision_fault_recorded_raw_vs_delivered() -> None:
-    # Rewrite the 4th decision (the refund) into a wrong-tool decision (F1-like).
-    hook = RewriteDecision(
+    # Replace the 4th decision (the refund) with a wrong-tool decision (F1-like).
+    plan = plans.replace_decision(
         4,
-        lambda d: Decision.call(
+        Decision.call(
             "close_ticket", ticket_id="TK1", resolution=Resolution.DENIED.value, note="x"
         ),
     )
-    record = record_scenario(load_scenario("T1"), fault_hook=hook)
+    record = record_scenario(load_scenario("T1"), fault_plan=plan)
     decisions = [
         (e, entry)
         for e, entry in zip(

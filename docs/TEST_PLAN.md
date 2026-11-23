@@ -29,18 +29,18 @@ uv run mypy
 - CLI via Typer's `CliRunner`: `scenarios`, `run` (exit codes, run id, persisted trace), `show`.
 
 ## 3. Property-based tests (Hypothesis)
-Week 1 property tests live next to their unit tests (`tests/unit/test_canonical.py` → P1, `tests/unit/test_env.py` → P3). `tests/property/` will hold the cross-module properties P2/P4 from Week 2.
+Week 1 property tests live next to their unit tests (`tests/unit/test_canonical.py` → P1, `tests/unit/test_env.py` → P3). P4 lives in `tests/property/test_cassette_mutation.py`: (a) any mutated JSON leaf in `header.json`/`events.jsonl`/`ledger.jsonl` is rejected at load; (b) any self-consistent mutation of a tool event's delivered response, ledger raw output or state hashes makes strict replay DIVERGE. P2 (generated states) remains stretch S2.
 | ID | Property | Week |
 |---|---|---|
 | P1 | canonical bytes are invariant under dict key permutation and Decimal scale (`80` vs. `80.00`) | 1 |
 | P3 | snapshot → restore → hash round-trips for generated valid states | 1 (stretch S2 for full generators; Week 1 has a basic version) |
 | P2 | record → exact replay satisfies invariant I1 on generated states | 2 / stretch |
-| P4 | any single-field cassette mutation is detected (never a silent pass) | 2 |
+| P4 | any single-field cassette mutation is detected (never a silent pass); decision payloads via the integrity chain, tool facts via replay | 2 (done) |
 
 Hypothesis profiles (`tests/conftest.py`): `dev` (max_examples=50, default) and `ci` (200, selected with `HYPOTHESIS_PROFILE=ci`), to stay light on 8 GB.
 
 ## 4. Replay acceptance tests (Weeks 2–3)
-Tests #1–#21 as defined in PLAN_v0.2.1 §13 (initial state, recording, modification, expected behaviour, final state, assertion). Mapping to REPLAY_SPEC: see REPLAY_SPEC §12. They live in `tests/acceptance/test_replay_matrix.py`, one test function per row, named `test_rNN_<slug>`.
+Tests #1–#21 as defined in PLAN_v0.2.1 §13 (initial state, recording, modification, expected behaviour, final state, assertion). Mapping to REPLAY_SPEC: see REPLAY_SPEC §12. They live in `tests/acceptance/test_replay_matrix.py`, one test function per row, named `test_rNN_<slug>`. Week 2 implements #1–#10, #15, #16, #21 plus: truncated and unconsumed cassettes (#3b, #3c), changed decision arguments (#4b), changed tool manifest (#5b), changed policy version/source, unknown scenario, outcome divergence and NOT_EVALUATED on divergence. Corrupted-cassette and fault-plan-file tampering are in `tests/unit/test_faults.py`, `tests/unit/test_store.py` and the CLI tests.
 
 ## 5. Fault-injection validation (Week 3)
 - Every fault instance: the clean run passes. Then faulty fail → `CAUSAL`, faulty pass → `MASKED`.

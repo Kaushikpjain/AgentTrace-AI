@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "plan_id": "lost-ack",
+  "faults": [
+    {
+      "fault_id": "lost_ack-issue_refund-1",
+      "operator": "LOST_ACK",
+      "stage": "POST_EXECUTION",
+      "trigger": {
+        "boundary": "TOOL",
+        "name": "issue_refund",
+        "occurrence": 1
+      },
+      "params": {}
+    }
+  ]
+}

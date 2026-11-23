@@ -31,6 +31,7 @@ def semantic_view(record: RunRecord) -> dict[str, Any]:
         "events": events,
         "ledger": [entry.model_dump(mode="python") for entry in record.ledger],
         "footer": record.footer.model_dump(mode="python", exclude=_FOOTER_EXCLUDE),
+        "fault_plan": record.fault_plan.model_dump(mode="python") if record.fault_plan else None,
     }
 
 

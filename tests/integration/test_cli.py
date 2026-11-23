@@ -65,3 +65,90 @@ def test_show_reports_corruption(tmp_path: Path) -> None:
 
 def test_show_missing_run(tmp_path: Path) -> None:
     assert runner.invoke(app, ["show", "run-missing", "--runs-dir", str(tmp_path)]).exit_code == 2
+
+
+# ------------------------------------------------------------------ Week 2: replay
+EXAMPLES = Path(__file__).resolve().parents[2] / "examples" / "fault_plans"
+
+
+def _record(tmp_path: Path, *args: str) -> str:
+    result = runner.invoke(app, ["run", *args, "--runs-dir", str(tmp_path)], terminal_width=200)
+    match = RUN_ID.search(result.output)
+    assert match is not None, result.output
+    return match.group(1)
+
+
+def test_replay_verified(tmp_path: Path) -> None:
+    run_id = _record(tmp_path, "T1")
+    result = runner.invoke(app, ["replay", run_id, "--runs-dir", str(tmp_path)], terminal_width=200)
+    assert result.exit_code == 0, result.output
+    for text in ("VERIFIED", "integrity", "no live policy calls", "final state hash equal"):
+        assert text in result.output
+
+
+def test_run_with_fault_plan_then_replay(tmp_path: Path) -> None:
+    plan = str(EXAMPLES / "lost_ack_refund.json")
+    result = runner.invoke(
+        app, ["run", "T1", "--fault-plan", plan, "--runs-dir", str(tmp_path)], terminal_width=200
+    )
+    assert result.exit_code == 1 and "NO_DUPLICATE_REFUND" in result.output
+    match = RUN_ID.search(result.output)
+    assert match is not None
+    run_id = match.group(1)
+    assert (tmp_path / run_id / "fault_plan.json").is_file()
+    replay = runner.invoke(
+        app, ["replay", run_id, "--runs-dir", str(tmp_path), "--save"], terminal_width=200
+    )
+    assert replay.exit_code == 0 and "VERIFIED" in replay.output
+    assert len(JsonlTraceStore(tmp_path).list_run_ids()) == 2  # original + saved replay
+
+
+def test_invalid_fault_plan_rejected(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.json"
+    bad.write_text(
+        '{"plan_id": "x", "faults": [{"fault_id": "f", "operator": "NOPE", '
+        '"stage": "POST_EXECUTION", "trigger": {"boundary": "TOOL", '
+        '"name": "get_order", "occurrence": 1}}]}'
+    )
+    result = runner.invoke(app, ["run", "T1", "--fault-plan", str(bad), "--no-save"])
+    assert result.exit_code == 2 and "invalid fault plan" in result.output
+
+
+def test_replay_config_mismatch_exit_code(tmp_path: Path) -> None:
+    run_id = _record(tmp_path, "T1", "--policy", "v1")
+    result = runner.invoke(
+        app, ["replay", run_id, "--policy", "v2", "--runs-dir", str(tmp_path)], terminal_width=200
+    )
+    assert result.exit_code == 3 and "CONFIG_MISMATCH" in result.output
+
+
+def test_replay_corrupted_cassette_exit_code(tmp_path: Path) -> None:
+    run_id = _record(tmp_path, "T1")
+    path = tmp_path / run_id / "events.jsonl"
+    lines = path.read_text().splitlines()
+    lines[2] = lines[2].replace('"customer_id":"C1"', '"customer_id":"C2"', 1)
+    path.write_text("\n".join(lines) + "\n")
+    result = runner.invoke(app, ["replay", run_id, "--runs-dir", str(tmp_path)], terminal_width=200)
+    assert result.exit_code == 4 and "INTEGRITY_ERROR" in result.output
+
+
+def test_replay_missing_run(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["replay", "run-missing", "--runs-dir", str(tmp_path)])
+    assert result.exit_code == 2
+
+
+def test_replay_diverged_exit_code_and_details(tmp_path: Path) -> None:
+    from agenttrace.env.support.scenario import load_scenario
+    from agenttrace.runner import record_scenario
+    from tests.replay_helpers import map_event, revalidated, tool_seqs
+
+    original = record_scenario(load_scenario("T1"))
+    seq = tool_seqs(original, "get_order")[0]
+    request = {"tool": "get_order", "args": {"order_id": "O9"}}
+    tampered = map_event(original, seq, lambda e: revalidated(e, request=request))
+    JsonlTraceStore(tmp_path).save(tampered)  # self-consistent: passes integrity checks
+    result = runner.invoke(
+        app, ["replay", tampered.header.run_id, "--runs-dir", str(tmp_path)], terminal_width=200
+    )
+    assert result.exit_code == 1, result.output
+    assert "DIVERGED" in result.output and f"REQUEST at seq {seq}" in result.output

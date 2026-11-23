@@ -1,23 +1,31 @@
-"""``atrace`` command-line interface (Week 1: scenarios, run, show).
+"""``atrace`` command-line interface: scenarios, run, show, replay.
 
-Exit codes for ``run``: 0 = oracle PASS, 1 = oracle FAIL, 2 = usage or execution error.
+Exit codes:
+- ``run``: 0 = oracle PASS, 1 = oracle FAIL, 2 = usage or execution error.
+- ``replay``: 0 = VERIFIED, 1 = DIVERGED, 2 = usage / run not found,
+  3 = CONFIG_MISMATCH, 4 = INTEGRITY_ERROR.
 """
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Annotated, Any, cast
 
 import typer
+from pydantic import ValidationError
 from rich.console import Console
 from rich.table import Table
 
 from agenttrace.env.support.scenario import list_scenario_ids, load_scenario
+from agenttrace.faults.operators import FaultPlanError
+from agenttrace.faults.plan import validate_plan
 from agenttrace.policies.support_scripted import PolicyVersion
-from agenttrace.runner import record_scenario
-from agenttrace.trace.schema import Boundary, Event, Outcome, Trace
-from agenttrace.trace.store import JsonlTraceStore, TraceStoreError
+from agenttrace.replay.exact import ReplayReport, ReplayVerdict, replay_run
+from agenttrace.runner import record_scenario, support_replay_context
+from agenttrace.trace.schema import Boundary, Event, FaultPlan, Outcome, Trace
+from agenttrace.trace.store import JsonlTraceStore, RunNotFoundError, TraceStoreError
 
 app = typer.Typer(
     name="atrace",
@@ -59,7 +67,9 @@ def _describe(event: Event) -> tuple[str, str, str]:
         observed = response.get("error") or response.get("data")
         state = ""
         if event.state is not None and event.state.committed:
-            state = f"committed ({len(event.state.delta)} changes)"
+            first = event.state.delta[0].path
+            extra = len(event.state.delta) - 1
+            state = f"committed {first}" + (f" (+{extra})" if extra else "")
         return event.name, _short(observed), state
     return "", "", ""
 
@@ -122,6 +132,10 @@ def run_cmd(
     ] = "v1",
     runs_dir: RunsDir = None,
     no_save: Annotated[bool, typer.Option("--no-save", help="Do not persist the trace")] = False,
+    fault_plan: Annotated[
+        Path | None,
+        typer.Option("--fault-plan", help="JSON FaultPlan to apply (see examples/fault_plans/)"),
+    ] = None,
 ) -> None:
     """Execute a scenario with the scripted agent and record the trace."""
     if policy not in ("v1", "v2"):
@@ -132,7 +146,15 @@ def run_cmd(
     except KeyError:
         console.print(f"[red]unknown scenario {scenario_id!r}; see `atrace scenarios`[/red]")
         raise typer.Exit(2) from None
-    record = record_scenario(scenario, policy_version=cast(PolicyVersion, policy))
+    plan: FaultPlan | None = None
+    if fault_plan is not None:
+        try:
+            plan = FaultPlan.model_validate(json.loads(fault_plan.read_text(encoding="utf-8")))
+            validate_plan(plan)
+        except (OSError, json.JSONDecodeError, ValidationError, FaultPlanError) as exc:
+            console.print(f"[red]invalid fault plan {fault_plan}: {exc}[/red]")
+            raise typer.Exit(2) from exc
+    record = record_scenario(scenario, policy_version=cast(PolicyVersion, policy), fault_plan=plan)
     saved_to: Path | None = None
     if not no_save:
         store = _store(runs_dir)
@@ -160,6 +182,118 @@ def show_cmd(
         raise typer.Exit(2) from exc
     _print_trace(trace, saved_to=None)
     console.print("[green]integrity verified[/green] (schema, fingerprints, hash chain)")
+
+
+_REPLAY_EXIT = {
+    ReplayVerdict.VERIFIED: 0,
+    ReplayVerdict.DIVERGED: 1,
+    ReplayVerdict.CONFIG_MISMATCH: 3,
+    ReplayVerdict.INTEGRITY_ERROR: 4,
+}
+
+
+def _check(ok: bool) -> str:
+    return "[green]✓[/green]" if ok else "[red]✗[/red]"
+
+
+def _print_replay(report: ReplayReport, saved_to: Path | None) -> None:
+    colour = "green" if report.verdict is ReplayVerdict.VERIFIED else "red"
+    console.print(
+        f"[bold]Strict replay of {report.original_run_id}:[/bold] "
+        f"[{colour}]{report.verdict.value}[/{colour}]"
+    )
+    if report.verdict is ReplayVerdict.INTEGRITY_ERROR:
+        console.print(f"  {_check(False)} trace/cassette integrity: {report.integrity_error}")
+        return
+    console.print(f"  {_check(True)} trace/cassette integrity (schema, fingerprints, hash chain)")
+    console.print(f"  {_check(report.config.ok)} configuration matches current code")
+    for problem in report.config.mismatches:
+        console.print(f"      [red]- {problem}[/red]")
+    if report.replay is None:
+        return
+    console.print(
+        f"  {_check(report.policy_calls == 0)} no live policy calls "
+        f"(calls={report.policy_calls}); cassette consumed "
+        f"{report.cassette_consumed}/{report.cassette_entries}"
+    )
+    fidelity = report.fidelity
+    assert fidelity is not None
+    table = Table(title="Replay fidelity (REPLAY_SPEC §11)")
+    table.add_column("metric")
+    table.add_column("result")
+    rows = [
+        (
+            "delivered responses equal",
+            str(fidelity.response_equality),
+            fidelity.response_equality.complete,
+        ),
+        (
+            "event sequence agreement",
+            str(fidelity.event_sequence),
+            fidelity.event_sequence_agreement,
+        ),
+        (
+            "raw tool results equal",
+            str(fidelity.raw_result_agreement),
+            fidelity.raw_result_agreement.complete,
+        ),
+        (
+            "state transitions equal",
+            str(fidelity.state_transition_agreement),
+            fidelity.state_transition_agreement.complete,
+        ),
+        (
+            "final state hash equal",
+            "yes" if fidelity.final_state_equal else "no",
+            fidelity.final_state_equal,
+        ),
+        (
+            "status + oracle outcome equal",
+            "yes" if fidelity.outcome_equal else "no",
+            fidelity.outcome_equal,
+        ),
+    ]
+    for name, value, ok in rows:
+        table.add_row(name, f"{_check(ok)} {value}")
+    console.print(table)
+    footer = report.replay.footer
+    console.print(
+        f"  replay status {footer.status.value}, oracle {footer.outcome.outcome.value}; "
+        f"final state {footer.final_state_hash[:23]}…"
+    )
+    if report.divergence is not None:
+        d = report.divergence
+        console.print(f"[red bold]First divergence:[/red bold] {d.kind.value} at seq {d.seq}")
+        console.print(f"  {d.detail}")
+        if d.expected_fp or d.actual_fp:
+            console.print(f"  expected {d.expected_fp}\n  actual   {d.actual_fp}")
+    if saved_to is not None:
+        console.print(f"[dim]replay trace saved to {saved_to}[/dim]")
+
+
+@app.command("replay")
+def replay_cmd(
+    run_id: Annotated[str, typer.Argument(help="Run id to replay exactly (REPLAY_STRICT)")],
+    runs_dir: RunsDir = None,
+    policy: Annotated[
+        str | None,
+        typer.Option("--policy", help="Replay under this policy version (default: recorded)"),
+    ] = None,
+    save: Annotated[bool, typer.Option("--save", help="Persist the replay trace")] = False,
+) -> None:
+    """Replay a recorded run exactly and verify requests, state transitions and outcome."""
+    store = _store(runs_dir)
+    try:
+        report = replay_run(store, run_id, support_replay_context(), policy_version=policy)
+    except (RunNotFoundError, TraceStoreError) as exc:
+        console.print(f"[red]{type(exc).__name__}: {exc}[/red]")
+        raise typer.Exit(2) from exc
+    saved_to: Path | None = None
+    if save and report.replay is not None:
+        store.save(report.replay)
+        saved_to = store.root / report.replay.header.run_id
+    _print_replay(report, saved_to)
+    raise typer.Exit(_REPLAY_EXIT[report.verdict])
 
 
 if __name__ == "__main__":  # pragma: no cover

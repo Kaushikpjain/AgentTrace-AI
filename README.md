@@ -25,8 +25,10 @@ Python 3.12 · uv · Pydantic v2 · Typer + Rich · pytest + Hypothesis · Ruff 
 ## Repository
 ```
 src/agenttrace/   trace/ (schema, canonical JSON, store) · env/support/ (sandbox env, scenarios)
-                  runtime/ (gateway, agent loop) · policies/ · evals/ · cli.py
-tests/            unit/ · integration/ · property/
+                  runtime/ (gateway, agent loop) · faults/ (fault plans) · replay/ (strict replay)
+                  policies/ · evals/ · runner.py · cli.py
+examples/         fault_plans/ (example FaultPlan JSON files)
+tests/            unit/ · integration/ · acceptance/ · property/
 docs/             PLAN_v0.2.1 · PRD · ARCHITECTURE · REPLAY_SPEC · TRACE_SCHEMA · TEST_PLAN · TASKS · DECISIONS
 benchmarks/       (Week 3) generated fault instances and labels
 ```
@@ -44,7 +46,12 @@ See `docs/TASKS.md` for the verified status of every task.
 - 8 declarative scenario templates (T1–T8) with a deterministic oracle.
 - CLI: `atrace scenarios`, `atrace run`, `atrace show`.
 
-**Not implemented yet:** exact replay, counterfactual replay, regression execution (Weeks 2–3); fault operators and benchmark (Week 3); localization metrics (Weeks 3–4).
+**Implemented and tested (Week 2):**
+- Versioned, serializable `FaultPlan` with stage-declared operators: timeout before execution (no commit), lost acknowledgement after commit, output corruption, decision replacement.
+- Strict exact replay (`REPLAY_STRICT`): restores the initial state, serves recorded decisions without calling the policy, re-executes sandbox tools with the recorded fault plan, and verifies raw results, state transitions, delivered responses, final state and outcome. It fails closed at the first divergence (request, ordering, missing/extra entries, raw result, state hash, response, outcome) and refuses changed configurations.
+- Fidelity report, and `atrace replay` with integrity, configuration, state and outcome verification.
+
+**Not implemented yet:** counterfactual replay and regression execution (Week 3), remaining fault operators and the benchmark (Week 3), localization metrics (Weeks 3–4).
 <!-- STATUS:END -->
 
 ## Installation
@@ -54,8 +61,10 @@ uv sync                      # creates an isolated .venv with locked dependencie
 uv run atrace scenarios      # list scenario templates
 uv run atrace run T1         # run the scripted agent; prints the trace and PASS/FAIL
 uv run atrace show <run_id>  # reload a saved run and verify its integrity
+uv run atrace run T1 --fault-plan examples/fault_plans/lost_ack_refund.json   # inject a fault
+uv run atrace replay <run_id>  # strict replay: verify state transitions and outcome
 ```
-Runs are saved under `./runs` (override with `--runs-dir` or `ATRACE_RUNS_DIR`). `atrace run` exits 0 on oracle PASS, 1 on FAIL and 2 on errors.
+Runs are saved under `./runs` (override with `--runs-dir` or `ATRACE_RUNS_DIR`). `atrace run` exits 0 on oracle PASS, 1 on FAIL and 2 on errors. `atrace replay` exits 0 VERIFIED, 1 DIVERGED, 3 CONFIG_MISMATCH, 4 INTEGRITY_ERROR (2 = usage / run not found).
 
 ## Testing
 ```bash

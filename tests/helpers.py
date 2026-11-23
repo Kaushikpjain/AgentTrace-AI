@@ -56,6 +56,7 @@ def make_header(run_id: str = "run-test-1", **overrides: Any) -> RunHeader:
 
 
 def make_record(run_id: str = "run-test-1") -> RunRecord:
+    header = make_header(run_id)
     request = {"tool": "issue_refund", "args": {"order_id": "O1", "amount": "80"}}
     response = {"status": "OK", "data": {"refund_id": "R-0001"}, "error": None}
     decision = {
@@ -137,7 +138,7 @@ def make_record(run_id: str = "run-test-1") -> RunRecord:
         ended_at=T0,
         wall_ms=5,
         integrity=Integrity(
-            event_count=3, ledger_count=2, chain_root=compute_chain_root(events, ledger)
+            event_count=3, ledger_count=2, chain_root=compute_chain_root(header, events, ledger)
         ),
     )
-    return RunRecord(header=make_header(run_id), events=events, ledger=ledger, footer=footer)
+    return RunRecord(header=header, events=events, ledger=ledger, footer=footer)

@@ -309,6 +309,62 @@ class LedgerEntry(_Model):
         return self
 
 
+# --------------------------------------------------------------------------- fault plan
+
+FAULT_PLAN_SCHEMA_VERSION = "1.0"
+
+
+class FaultTrigger(_Model):
+    """Where a fault fires: the n-th call of a tool, or the n-th decision, in a run."""
+
+    boundary: Boundary
+    name: str | None = None
+    occurrence: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.boundary is Boundary.TOOL and not self.name:
+            raise ValueError("TOOL triggers require a tool name")
+        if self.boundary is Boundary.DECISION and self.name is not None:
+            raise ValueError("DECISION triggers take no name")
+        if self.boundary not in (Boundary.TOOL, Boundary.DECISION):
+            raise ValueError("triggers exist only for TOOL and DECISION boundaries")
+        return self
+
+
+class FaultSpec(_Model):
+    fault_id: str = Field(min_length=1, max_length=64)
+    operator: str = Field(min_length=1, max_length=64)
+    stage: FaultStage
+    trigger: FaultTrigger
+    params: JsonPayload = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if not isinstance(self.params, dict):
+            raise ValueError("params must be an object")
+        if (self.stage is FaultStage.DECISION) != (self.trigger.boundary is Boundary.DECISION):
+            raise ValueError("DECISION-stage faults must use DECISION triggers and vice versa")
+        return self
+
+
+class FaultPlan(_Model):
+    """Versioned, serializable fault configuration of a run (privileged; TRACE_SCHEMA.md)."""
+
+    schema_version: str = FAULT_PLAN_SCHEMA_VERSION
+    plan_id: str = Field(min_length=1, max_length=128)
+    faults: tuple[FaultSpec, ...] = ()
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.schema_version.split(".")[0] != FAULT_PLAN_SCHEMA_VERSION.split(".")[0]:
+            raise ValueError(f"unsupported fault plan schema {self.schema_version!r}")
+        ids = [f.fault_id for f in self.faults]
+        if len(ids) != len(set(ids)):
+            raise ValueError("fault_id values must be unique within a plan")
+        return self
+
+
 # --------------------------------------------------------------------------- footer
 
 
@@ -367,12 +423,21 @@ class Trace(_Model):
 
 
 class RunRecord(_Model):
-    """Complete recording, including the privileged ledger."""
+    """Complete recording, including the privileged ledger and fault plan."""
 
     header: RunHeader
     events: tuple[Event, ...]
     ledger: tuple[LedgerEntry, ...]
     footer: RunFooter
+    fault_plan: FaultPlan | None = None
+
+    @model_validator(mode="after")
+    def _check_fault_plan(self) -> Self:
+        expected = self.header.fault_plan_hash
+        actual = fingerprint(self.fault_plan) if self.fault_plan is not None else None
+        if expected != actual:
+            raise ValueError("fault_plan does not match header.fault_plan_hash")
+        return self
 
     def observable(self) -> Trace:
         return Trace(header=self.header, events=self.events, footer=self.footer)

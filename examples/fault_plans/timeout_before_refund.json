@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "plan_id": "pre-execution-timeout",
+  "faults": [
+    {
+      "fault_id": "timeout_before_execution-issue_refund-1",
+      "operator": "TIMEOUT_BEFORE_EXECUTION",
+      "stage": "PRE_EXECUTION",
+      "trigger": {
+        "boundary": "TOOL",
+        "name": "issue_refund",
+        "occurrence": 1
+      },
+      "params": {}
+    }
+  ]
+}
