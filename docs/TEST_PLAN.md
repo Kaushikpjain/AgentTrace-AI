@@ -88,5 +88,17 @@ Property: `tests/property/test_placebo_property.py` checks that for generated be
 | 11 | pytest passes | `pytest` |
 | 12 | CI config valid | YAML parses; its steps are the same commands executed locally |
 
+## 8b. Week 4 evaluation tests
+- `tests/unit/test_evaluation.py`:
+  - Wilson, exact McNemar, Holm, template bootstrap and summary checked against known values;
+  - metrics on hand-built fixtures (Top-1/3, MRR, secondary match, B0, paired counts, Metric B);
+  - injected violations are detected;
+  - test-split guard cases (no flag, dirty tree, missing tag, HEAD mismatch, git unavailable);
+  - an AST check that `bench/evaluate.py` never reads labels or ledgers.
+- `tests/integration/test_bench_run.py`:
+  - byte-identical canonical outputs over a 7-instance subset; volatile files carry the run id and timestamps;
+  - checks OK and an identical eligible set for every method;
+  - the CLI refuses `--split test` and writes nothing.
+
 ## 9. Checkpoint criteria
 CP1–CP5 as in PLAN_v0.2.1 §19. A checkpoint is passed only when its listed tests pass in a run recorded in TASKS.md.

@@ -17,7 +17,7 @@ A **modular monolith** (ADR-002): one Python package `agenttrace`, a CLI, no ser
 | `agenttrace.replay` | `Cassette` (positional, consume-once, fence), `StrictReplayGateway`, `replay_strict`/`replay_run`, config check, fidelity (Week 2); `counterfactual` (typed interventions, placebos, reference probe), `regression`, `service` (InterventionService) (Week 3) | Week 2–3 |
 | `agenttrace.faults` | Registered stage-declared operators (T0, F3, F5, `REPLACE_DECISION` in Week 2; F1, F2, F4, D1 in Week 3), `PlanFaultHook`, `validate_plan` | Week 2–3 |
 | `agenttrace.localize` | `observe` (symptom, argument-origin chain), baselines B1/B3/B4, CF localizer, Markdown report; reads only `Trace` + `InterventionService` | Week 3 |
-| `agenttrace.bench` | Candidate generator, privileged validator, benchmark files (manifest, instances, labels, rejected); metrics A/B/C in Week 4 | Week 3 |
+| `agenttrace.bench` | Candidate generator, privileged validator, benchmark files (Week 3); `evaluate` (label-free localizer runs), `metrics` + `stats` (Metrics A/B/C, privileged join), `report`, `run` (canonical/volatile outputs, held-out guard) (Week 4) | Week 3–4 |
 | `agenttrace.cli_diagnose` | `inject`, `intervene`, `regress`, `investigate`, `bench generate/verify/list` | Week 3 |
 
 ## 3. Dependency direction
@@ -117,13 +117,16 @@ src/agenttrace/
   replay/    cassette.py  exact.py (strict replay, config check, report)  fidelity.py
              counterfactual.py  regression.py  service.py
   localize/  observe.py  baselines.py (B1, B3, B4)  counterfactual.py (CF)  report.py  types.py
-  bench/     generate.py  validate.py (privileged)  io.py
+  bench/     generate.py  validate.py (privileged)  io.py  evaluate.py  metrics.py  stats.py
+             report.py  run.py
   cli_diagnose.py (Week 3 commands)
   policies/  support_scripted.py (v1, v2)  reference.py (ReferencePolicy, gold reference)
   evals/     oracle.py  validators.py
 tests/       unit/  integration/  acceptance/  property/  helpers.py  hooks.py  plans.py  replay_helpers.py  conftest.py
 examples/fault_plans/  lost_ack_refund.json  timeout_before_refund.json  corrupt_order_total.json
 benchmarks/synth_v0/   manifest.json  instances.jsonl  labels.jsonl (privileged)  rejected.jsonl
+evaluation/            synth_v0-dev/ (canonical + volatile outputs)  TEST_RUNS.log (after the test run)
+scripts/demo.sh  Makefile  FREEZE.md  CHANGELOG.md  private/ (git-ignored)
 benchmarks/  (Week 3: generated fault instances, labels, splits)
 .github/workflows/ci.yml
 ```

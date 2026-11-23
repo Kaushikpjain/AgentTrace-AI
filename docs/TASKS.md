@@ -40,14 +40,18 @@ Also pulled forward from W3.1 (needed by strict replay, approved 2026-11-23): ve
 | W3.5 | Validators; baselines B1, B3, B4 | P1 | W3.2 | 2.0 | unit tests | DONE |
 | W3.6 | CF localizer + Markdown investigation report | P0 | W3.3, W3.5 | 1.0 | report shows evidence labels | DONE |
 
-## Week 4: Evaluation & release (committed 9 h)
+## Week 4: Evaluation & release (approved plan `docs/WEEK4_PLAN.md`: 14.5 h + 2 h contingency)
 | ID | Description | Priority | Depends on | Est. h | Acceptance criteria | Status |
 |---|---|---|---|---|---|---|
-| W4.1 | `bench run`: Metric A/B/C + Wilson CIs + manifest | P0 | W3 | 2.5 | tables generated | TODO |
-| W4.2 | Dev run, fixes, freeze tag, test-split run | P0 | W4.1 | 2.0 | frozen results | TODO |
-| W4.3 | README results + limitations; docs pass | P0 | W4.2 | 2.5 | docs consistent | TODO |
-| W4.4 | `make demo` + terminal recording | P1 | W4.2 | 1.0 | demo runs end-to-end | TODO |
-| W4.5 | NEXT.md (Phase 2A plan) | P2 | W4.3 | 1.0 | written | TODO |
+| W4.1 | Metrics A/B/C + statistics (`bench/metrics.py`, `bench/stats.py`) | P0 | W3 | 3.0 | fixture tests with hand-computed values pass | DONE |
+| W4.2 | `atrace bench run`: canonical vs. volatile outputs, byte-identical reruns | P0 | W4.1 | 2.0 | `make reproduce-dev` identical; subset determinism test | DONE |
+| W4.3 | Correctness checks + failure gallery | P0 | W4.2 | 2.0 | all checks OK on dev; violation fixtures detected | DONE |
+| W4.4 | Dev-split review and fixes (DEV ONLY) | P0 | W4.3 | 1.0 | changes recorded (ADR-022, FREEZE.md) | DONE |
+| W4.5 | Freeze protocol: FREEZE.md, `bench config` fingerprints, guarded test command, run log | P0 | W4.4 | 1.0 | guard refuses without clean tree, tag and flag (tests) | DONE (tag and test run await approval) |
+| W4.6 | Makefile + scripted demo | P1 | W4.2 | 1.5 | `DEMO_NONINTERACTIVE=1 make demo` exits 0 | DONE |
+| W4.7 | README, EVALUATION, WALKTHROUGH, limitations, Phase 2 roadmap | P0 | W4.4 | 3.0 | docs consistent; README commands verified | DONE |
+| W4.8 | Release prep: 0.1.0rc1, CHANGELOG, pinned actions, audit, RELEASE checklist | P1 | W4.7 | 1.0 | audit clean; checklist written | DONE (owner items open) |
+| W4.T | Freeze tag + single held-out test run | P0 | approval | — | owner approval at CP-T | BLOCKED (awaiting approval) |
 
 ## Stretch (+16 h, PLAN §18)
 S1 templates T4/T7/T8 (1.0) **DONE in W1.5** · S2 property P2/P3 full (1.5) · S3 classifier (2.0) · S4 B2 (0.5) · S5 LCS alignment (2.0) · S6 two-fault cases (1.0) **DONE (2 MULTI instances)** · S7 decoys (0.5) **DONE (8 decoy-only + 8 decoy+F4)** · S8 Rich timeline (1.5) · S9 CI bench smoke + pip-audit (1.0) · S10 boundary test + JSON-schema export (1.0) · S11 EVALUATION/SECURITY docs (2.0) · S12 demo video (0.5) · S13 robustness tests (1.5). All others `TODO`.
@@ -80,3 +84,9 @@ Phase 2A local LLM policy · Phase 2B LangGraph adapter · Phase 2C FastAPI + Re
 | 2026-11-23 (W3) | experiment at the injection site of every CAUSAL single-site instance (default request + same-type placebo) | 38/38 repair observed, 38/38 placebo valid |
 | 2026-11-23 (W3) | regression of the 4 F5 baselines with candidate v2 | 4/4 FAIL → DETERMINISTIC_PASS (FIXED), 2/2 runs each |
 | 2026-11-23 (W3) | PRELIMINARY dev-split localization (16 CAUSAL single-site; test split untouched) | Top-1: B1 8, B3 8, B4 13, CF 16; Top-3: B1 8, B3 9, B4 16, CF 16; CF replays 8–16 per run (182 total); max RSS ~37 MB |
+| 2026-11-23 (W4) | baseline before Week 4 (HEAD = origin/main = cee6f50): ruff, mypy, pytest | clean; all passed |
+| 2026-11-23 (W4) | `atrace bench run --split dev` | 30 instances, 16 eligible; all correctness checks OK; 2.3 s, max RSS ~45 MB |
+| 2026-11-23 (W4) | `make reproduce-dev` | 6/6 canonical files byte-identical across two runs; environment/timings differ (volatile) |
+| 2026-11-23 (W4) | `make audit` (pip-audit, `--require-hashes`, exported lock) | No known vulnerabilities found |
+| 2026-11-23 (W4) | `DEMO_NONINTERACTIVE=1 ./scripts/demo.sh` | exit 0; replay VERIFIED; CF repair site seq 11; regression FIXED |
+| 2026-11-23 (W4) | GitHub Actions pins resolved via `git ls-remote --tags` | checkout v4.4.0 = 11d5960a…; setup-uv v6.8.0 = d0cc045d… (lightweight tags) |

@@ -1,6 +1,6 @@
 [project]
 name = "agenttrace"
-version = "0.0.1"
+version = "0.1.0rc1"
 description = "Deterministic record/replay, controlled interventions and failure diagnosis for tool-using AI agents."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

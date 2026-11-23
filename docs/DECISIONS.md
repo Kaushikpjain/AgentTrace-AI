@@ -25,6 +25,9 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 | 019 | InterventionService as the only privileged channel for localizers | Accepted |
 | 020 | Benchmark files committed; instances carry fault plans, labels separate | Accepted |
 | 021 | OBSERVATION_REPLACEMENT consistency rule and gateway lifecycle refactor | Accepted |
+| 022 | Secondary "same-step action" Top-1 (dev review) | Accepted |
+| 023 | Canonical vs. volatile evaluation outputs; guarded held-out split | Accepted |
+| 024 | Private notes kept outside version control; 0.1.0rc1 | Accepted |
 
 ---
 
@@ -126,3 +129,14 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 
 ## ADR-021: Gateway lifecycle refactor; observation consistency rule
 - **Decision:** stages S1–S4 became a pure `BoundaryGateway.lifecycle(name, args, ctx, hook, state)` that returns the resulting state without installing it. New seams: `_tool_hook(seq)`, `_transform_delivered(...)`, `_is_intervened(seq)`. All Week 1–2 tests pass unchanged. `OBSERVATION_REPLACEMENT` with `REFERENCE_TOOL` is refused (`observation_inconsistent_with_state`) whenever the reference execution's `(committed, after_hash)` differs from the original's.
+
+## ADR-022: Secondary "same-step action" Top-1 (dev review, before freeze)
+- **Context:** on dev, B1/B3 missed every F1/F2 instance under strict matching. In each case they ranked the tool call issued by the faulty decision (seq site+1, same step). By design they flag visible errors, not decisions.
+- **Decision:** keep the strict site match as the **primary** Metric A. Add a secondary Top-1 in which a DECISION site also counts when its own tool call is ranked first. No localizer, weight or benchmark instance was changed.
+- **Trade-offs:** the secondary metric is lenient towards observation-based baselines. Reporting both avoids hiding either the off-by-one effect or the strict result.
+
+## ADR-023: Evaluation outputs and the held-out guard
+- **Decision:** canonical outputs (`metrics.json`, `config.json`, `results.jsonl`, `table.md`, `failure_cases.md`, `canonical_fingerprints.json`) contain no timestamps, run ids, git state or timings, and must be byte-identical across reruns. Volatile metadata goes to `environment.json` and `timings.json`. `bench run --split test` refuses unless the tree is clean, HEAD equals `bench-freeze-v0` and `--confirm-single-test-run` is given. Each test run is appended to `evaluation/TEST_RUNS.log`. Evaluation outputs live in the tracked `evaluation/` directory (`runs/` and `results/` stay ignored).
+
+## ADR-024: Private notes and versioning
+- **Decision:** the owner's private notes live in a git-ignored `private/` directory and are never referenced by public docs. The package version is `0.1.0rc1` until the owner approves the release. No licence file is added (ADR-010).

@@ -35,6 +35,7 @@ class ExperimentSummary:
     placebo_valid: bool
     repair_observed: bool
     reason: str | None = None
+    cassette_accesses_after_fence: int = 0  # max over intervention and placebo (must be 0)
 
     @property
     def interventional_repair(self) -> bool:
@@ -93,6 +94,10 @@ class InterventionService:
                 placebo_valid=result.placebo_valid,
                 repair_observed=result.repair_observed,
                 reason=result.intervention.reason,
+                cassette_accesses_after_fence=max(
+                    result.intervention.cassette_accesses_after_fence,
+                    result.placebo.cassette_accesses_after_fence,
+                ),
             )
         self.__experiments[seq] = summary
         return summary

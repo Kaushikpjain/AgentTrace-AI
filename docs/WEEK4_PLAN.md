@@ -1,7 +1,8 @@
 # Week 4 Plan: Evaluation, Freeze, Demo and Release Readiness (for approval)
 
-> Status: **PROPOSED; not implemented.** The held-out test split has **not** been run. Nothing in this plan runs it without your explicit approval at checkpoint CP-T.
-> Budget: 2–3 h/day on an 8 GB MacBook Air M2. **Committed: ~12.5 h + 2 h buffer** over about 5–6 sessions; **stretch: ~5 h**.
+> Status: **APPROVED with corrections (2026-11-23); in implementation.** The held-out test split has **not** been run. Nothing in this plan runs it without your explicit approval at checkpoint CP-T.
+> Budget: 2–3 h/day on an 8 GB MacBook Air M2. **Committed: 14.5 h implementation + 2 h contingency = 16.5 h** over about 6–7 sessions; **stretch: ~5 h** (deferred first if time runs short).
+> Correction: v0.2 of this plan said "~12.5 h". The task estimates summed to 13.5 h and the session table to 14.5 h. W4.7 is raised to 3.0 h (it now also covers the failure-investigation walkthrough), so both totals are 14.5 h.
 > Baseline: local commit `ac33265` (Week 3), 306 tests passing, benchmark `synth_v0` (67 instances).
 
 ## 0. Starting facts (measured, not assumed)
@@ -85,7 +86,7 @@ Inputs: localizer `Investigation`s plus labels. This module is the only consumer
   8. print the frozen results table.
 - Recording: asciinema isn't installed. Proposal: you record the terminal with the macOS screen recorder, or I can add `asciinema` as an optional tool (needs your approval). The plan doesn't depend on either.
 
-### W4.7 README and documentation: 2.0 h
+### W4.7 README, walkthrough and documentation: 3.0 h
 - README:
   - a 60-second overview;
   - a Mermaid architecture diagram;
@@ -112,9 +113,10 @@ S3 rule-based failure classifier + confusion matrix (2.0) · S4 baseline B2 (0.5
 | 2 | W4.2 `bench run`, determinism; dev run | 2.5 |
 | 3 | W4.3 checks + failure gallery; W4.4 dev review | 2.5 |
 | 4 | W4.5 freeze → **CP-T approval** → single test run → commit results | 1.5 |
-| 5 | W4.6 demo + Makefile; W4.7 README/EVALUATION | 3.0 (of 3.5) |
-| 6 | W4.7 remainder; W4.8 release checklist; buffer | 2.0 + buffer |
-| **Total** | | **~12.5 h + 2 h buffer** |
+| 5 | W4.6 demo + Makefile; W4.7 README/EVALUATION | 3.0 |
+| 6 | W4.7 remainder (walkthrough); W4.8 release checklist | 2.0 |
+| 7 | contingency | 2.0 |
+| **Total** | | **14.5 h + 2 h contingency = 16.5 h** |
 
 **Checkpoints:**
 - CP-A: metrics tests pass, end of session 1.
@@ -140,8 +142,8 @@ If CP-B or CP-C fails, the stretch work is dropped and the cause is fixed before
   - (b) remove the files in a new commit (stops new readers of `main`, history remains);
   - (c) rewrite history and force-push (destructive; does not undo an existing disclosure).
   
-  Tell the university IPR cell the earliest public date: **2026-11-23**.
-- Week 3 commit `ac33265` is **local only**; CI has never run on GitHub.
+  Further notes are kept privately (git-ignored, not in public docs).
+- Week 3 commit `ac33265` and this plan (`cee6f50`) were pushed on 2026-11-23 at your request; CI status on GitHub is unverified from this machine.
 
 ## 5. Phase 2 roadmap (separate; not part of Week 4)
 - **2A Real LLM agent (local, free):**

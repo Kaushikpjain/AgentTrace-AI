@@ -15,13 +15,16 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       HYPOTHESIS_PROFILE: ci
     steps:
-      # NOTE: pin these actions to full commit SHAs before the repository is made public.
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      # Actions pinned to commit SHAs (resolved with `git ls-remote --tags` on 2026-11-23;
+      # both tags are lightweight, so the tag SHA is the commit SHA).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
       - name: Install Python 3.12
@@ -40,3 +43,11 @@ jobs:
         run: |
           uv run atrace scenarios
           uv run atrace run T1 --no-save
+      - name: Benchmark files match a deterministic regeneration
+        run: uv run atrace bench verify
+      - name: Dev-split evaluation (correctness checks must pass)
+        run: uv run atrace bench run --split dev --out "$RUNNER_TEMP/dev-eval"
+      - name: Dependency audit (pip-audit on the exported lock file)
+        run: |
+          uv export --format requirements-txt --frozen --no-emit-project > "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit -r "$RUNNER_TEMP/requirements.txt" --require-hashes --disable-pip --progress-spinner off

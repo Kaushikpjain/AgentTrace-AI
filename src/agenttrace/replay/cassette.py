@@ -28,7 +28,12 @@ class CassetteEntry:
 class Cassette:
     """Boundary events of a recording, served strictly in order and verified on every lookup."""
 
+    constructed = (
+        0  # process-wide count, used by correctness checks (regression must not build one)
+    )
+
     def __init__(self, record: RunRecord) -> None:
+        Cassette.constructed += 1
         boundary = [e for e in record.events if e.boundary in (Boundary.DECISION, Boundary.TOOL)]
         if len(boundary) != len(record.ledger):
             raise ValueError("record has mismatched events and ledger")

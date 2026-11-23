@@ -329,3 +329,68 @@ def bench_list(
             instance["instance_id"], instance["scenario_id"], instance["split"], instance["kind"]
         )
     console.print(table)
+
+
+@bench_app.command("run")
+def bench_run(
+    split: Annotated[str, typer.Option("--split", help="dev | test (test is guarded)")] = "dev",
+    out: Annotated[Path | None, typer.Option("--out", help="Output directory")] = None,
+    methods: Annotated[
+        str, typer.Option("--methods", help="Comma list of B1,B3,B4,CF")
+    ] = "B1,B3,B4,CF",
+    bench_dir: BenchDir = DEFAULT_DIR,
+    confirm_single_test_run: Annotated[
+        bool, typer.Option("--confirm-single-test-run", help="Required for --split test")
+    ] = False,
+    skip_regeneration_check: Annotated[
+        bool, typer.Option("--skip-regeneration-check", help="Skip benchmark regeneration check")
+    ] = False,
+) -> None:
+    """Evaluate a split: Metric A/B/C, replay cost, correctness checks (exit 1 on violations)."""
+    from agenttrace.bench.evaluate import METHODS
+    from agenttrace.bench.run import EVALUATION_DIR, run_benchmark, test_split_guard
+
+    chosen = [m.strip().upper() for m in methods.split(",") if m.strip()]
+    if split not in ("dev", "test") or not chosen or set(chosen) - set(METHODS):
+        console.print("[red]--split must be dev|test and --methods a subset of B1,B3,B4,CF[/red]")
+        raise typer.Exit(2)
+    if split == "test":
+        problems = test_split_guard(confirmed=confirm_single_test_run)
+        if problems:
+            console.print("[red bold]Refusing to run the held-out test split:[/red bold]")
+            for problem in problems:
+                console.print(f"  [red]- {problem}[/red]")
+            raise typer.Exit(2)
+    target = out or EVALUATION_DIR / f"synth_v0-{split}"
+    metrics = run_benchmark(
+        split=split,
+        ctx=support_replay_context(),
+        out_dir=target,
+        methods=chosen,
+        bench_dir=bench_dir,
+        check_regeneration=not skip_regeneration_check,
+    )
+    checks = metrics["checks"]
+    console.print((target / "table.md").read_text(encoding="utf-8"))
+    console.print(f"[dim]outputs written to {target}[/dim]")
+    if not checks["ok"]:
+        console.print(f"[red bold]Correctness violations: {checks['violations']}[/red bold]")
+        raise typer.Exit(1)
+
+
+@bench_app.command("config")
+def bench_config(
+    split: Annotated[str, typer.Option("--split", help="dev | test")] = "test",
+    methods: Annotated[str, typer.Option("--methods")] = "B1,B3,B4,CF",
+    bench_dir: BenchDir = DEFAULT_DIR,
+) -> None:
+    """Print the exact evaluation configuration and its fingerprint (recorded in FREEZE.md)."""
+    import json as _json
+
+    from agenttrace.bench.run import experiment_config
+    from agenttrace.trace.fingerprint import fingerprint as _fp
+
+    config = experiment_config(split, [m.strip().upper() for m in methods.split(",")], bench_dir)
+    config["regeneration_check"] = True
+    console.print_json(_json.dumps(config, sort_keys=True))
+    console.print(f"config_fingerprint: {_fp(config)}")
