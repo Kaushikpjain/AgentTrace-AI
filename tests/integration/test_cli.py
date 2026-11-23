@@ -152,3 +152,116 @@ def test_replay_diverged_exit_code_and_details(tmp_path: Path) -> None:
     )
     assert result.exit_code == 1, result.output
     assert "DIVERGED" in result.output and f"REQUEST at seq {seq}" in result.output
+
+
+# ------------------------------------------------------------------ Week 3 commands
+def _inject(tmp_path: Path, instance: str) -> str:
+    result = runner.invoke(
+        app, ["inject", instance, "--runs-dir", str(tmp_path)], terminal_width=200
+    )
+    match = RUN_ID.search(result.output)
+    assert match is not None, result.output
+    return match.group(1)
+
+
+def test_inject_records_instance_with_fault_plan(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app, ["inject", "T1-F4", "--runs-dir", str(tmp_path)], terminal_width=200
+    )
+    assert result.exit_code == 1 and "FAIL" in result.output  # causal instance fails
+    run_id = RUN_ID.search(result.output).group(1)  # type: ignore[union-attr]
+    assert (tmp_path / run_id / "fault_plan.json").is_file()
+    assert runner.invoke(app, ["inject", "T9-NOPE", "--runs-dir", str(tmp_path)]).exit_code == 2
+
+
+def test_intervene_repair_and_placebo(tmp_path: Path) -> None:
+    run_id = _inject(tmp_path, "T1-F4")
+    result = runner.invoke(
+        app,
+        [
+            "intervene",
+            run_id,
+            "--seq",
+            "8",
+            "--type",
+            "execution",
+            "--runs-dir",
+            str(tmp_path),
+            "--save",
+        ],
+        terminal_width=200,
+    )
+    assert result.exit_code == 0, result.output
+    output = " ".join(result.output.split())  # Rich wraps lines at its own width
+    for text in (
+        "COMPLETED → PASS",
+        "COMPLETED → FAIL",
+        "INTERVENTIONAL_REPAIR",
+        "placebo valid: yes",
+        "not proof of a unique cause",
+    ):
+        assert text in output
+    assert len(JsonlTraceStore(tmp_path).list_run_ids()) == 3  # original + intervention + placebo
+
+
+def test_intervene_unsupported_exit_code(tmp_path: Path) -> None:
+    run_id = _inject(tmp_path, "T1-F4")
+    result = runner.invoke(
+        app,
+        ["intervene", run_id, "--seq", "7", "--type", "execution", "--runs-dir", str(tmp_path)],
+        terminal_width=200,
+    )
+    output = " ".join(result.output.split())
+    assert result.exit_code == 5 and "UNSUPPORTED: no_state_transition_at_decision" in output
+    bad = runner.invoke(
+        app, ["intervene", run_id, "--seq", "7", "--type", "x", "--runs-dir", str(tmp_path)]
+    )
+    assert bad.exit_code == 2
+
+
+def test_regress_fixed_and_still_failing(tmp_path: Path) -> None:
+    run_id = _inject(tmp_path, "T1-F5")
+    fixed = runner.invoke(
+        app, ["regress", run_id, "--policy", "v2", "--runs-dir", str(tmp_path)], terminal_width=200
+    )
+    assert fixed.exit_code == 0 and "DETERMINISTIC_PASS" in fixed.output and "FIXED" in fixed.output
+    still = runner.invoke(
+        app, ["regress", run_id, "--policy", "v1", "--runs-dir", str(tmp_path)], terminal_width=200
+    )
+    assert still.exit_code == 1 and "STILL_FAILING" in still.output
+    error = runner.invoke(app, ["regress", run_id, "--policy", "v9", "--runs-dir", str(tmp_path)])
+    assert error.exit_code == 3
+
+
+def test_investigate_with_markdown(tmp_path: Path) -> None:
+    run_id = _inject(tmp_path, "T1-D1+F4")
+    report = tmp_path / "report.md"
+    result = runner.invoke(
+        app,
+        ["investigate", run_id, "--runs-dir", str(tmp_path), "--markdown", str(report)],
+        terminal_width=200,
+    )
+    assert result.exit_code == 0, result.output
+    assert "repair sites: seq 11" in result.output and "B4" in result.output
+    text = report.read_text()
+    assert "## Method CF" in text and "INTERVENTIONAL_REPAIR" in text
+    bad = runner.invoke(
+        app, ["investigate", run_id, "--methods", "zz", "--runs-dir", str(tmp_path)]
+    )
+    assert bad.exit_code == 2
+
+
+def test_bench_list_hides_labels_and_verify_passes() -> None:
+    listed = runner.invoke(app, ["bench", "list", "--split", "dev"], terminal_width=200)
+    assert listed.exit_code == 0 and "T1-F4" in listed.output and "T5-F4" not in listed.output
+    assert "CAUSAL" not in listed.output and "MASKED" not in listed.output
+    verified = runner.invoke(app, ["bench", "verify"], terminal_width=200)
+    assert verified.exit_code == 0 and "match" in verified.output
+
+
+def test_bench_generate_to_directory(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app, ["bench", "generate", "--bench-dir", str(tmp_path)], terminal_width=200
+    )
+    assert result.exit_code == 0 and "instances" in result.output
+    assert (tmp_path / "labels.jsonl").is_file()

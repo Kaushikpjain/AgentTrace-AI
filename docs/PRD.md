@@ -28,11 +28,11 @@ AgentTrace AI is a reliability, security-testing and failure-diagnosis platform 
 | FR5 | JSONL store with atomic writes, validation, integrity chain, corruption/incomplete detection | 1 |
 | FR6 | CLI: `scenarios`, `run`, `show` | 1 |
 | FR7 | REPLAY_STRICT with divergence detection and a fidelity report (**implemented, Week 2**) | 2 |
-| FR8 | Fault layer with stage-declared operators F1–F5, decoy D1, T0 fixture (FaultPlan, T0, F3, F5 implemented in Week 2) | 2–3 |
-| FR9 | REPLAY_INTERVENE with observation/execution replacement, same-type placebo, UNSUPPORTED results | 3 |
-| FR10 | REGRESSION execution without cassette access | 3 |
-| FR11 | Baselines B1, B3, B4 and a CF localizer with evidence labels | 3 |
-| FR12 | Benchmark generation + label validation + Metric A/B/C report, reproducible with one command | 3–4 |
+| FR8 | Fault layer with stage-declared operators F1–F5, decoy D1, T0 fixture (**implemented**: T0/F3/F5 in Week 2; F1, F2, F4, D1 in Week 3) | 2–3 |
+| FR9 | REPLAY_INTERVENE with observation/execution replacement, same-type placebo, UNSUPPORTED results (**implemented**) | 3 |
+| FR10 | REGRESSION execution without cassette access (**implemented**) | 3 |
+| FR11 | Baselines B1, B3, B4 and a CF localizer with evidence labels (**implemented**) | 3 |
+| FR12 | Benchmark generation + label validation (**implemented, Week 3**) + Metric A/B/C report (Week 4), reproducible with one command | 3–4 |
 
 ## 5. Non-functional requirements
 | ID | Requirement |

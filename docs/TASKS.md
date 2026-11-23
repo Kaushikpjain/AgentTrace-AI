@@ -33,12 +33,12 @@ Also pulled forward from W3.1 (needed by strict replay, approved 2026-11-23): ve
 ## Week 3: Faults, counterfactuals, regression, localization (committed 14 h)
 | ID | Description | Priority | Depends on | Est. h | Acceptance criteria | Status |
 |---|---|---|---|---|---|---|
-| W3.1 | Fault layer: remaining operators F1, F2, F4, D1 (FaultPlan, T0, F3 `CORRUPT_OUTPUT`, F5 `LOST_ACK`, `REPLACE_DECISION` already done in Week 2); labels sidecar | P0 | W2 | 2.0 | stage declared and verified per operator | TODO |
-| W3.2 | Benchmark generator + label validation + splits | P0 | W3.1 | 2.5 | CAUSAL/MASKED validated; ≥8 delayed-effect | TODO |
-| W3.3 | CounterfactualRunner: both types, UNSUPPORTED, fence, same-type placebo | P0 | W2 | 4.0 | #11–#13, #17–#19 pass | TODO |
-| W3.4 | RegressionRunner + fixtures | P0 | W2 | 1.5 | #14, #20 pass | TODO |
-| W3.5 | Validators; baselines B1, B3, B4 | P1 | W3.2 | 2.0 | unit tests | TODO |
-| W3.6 | CF localizer + Markdown investigation report | P0 | W3.3, W3.5 | 1.0 | report shows evidence labels | TODO |
+| W3.1 | Fault layer: remaining operators F1, F2, F4, D1 (FaultPlan, T0, F3 `CORRUPT_OUTPUT`, F5 `LOST_ACK`, `REPLACE_DECISION` already done in Week 2); labels sidecar | P0 | W2 | 2.0 | stage declared and verified per operator | DONE |
+| W3.2 | Benchmark generator + label validation + splits | P0 | W3.1 | 2.5 | CAUSAL/MASKED validated; ≥8 delayed-effect | DONE |
+| W3.3 | CounterfactualRunner: both types, UNSUPPORTED, fence, same-type placebo | P0 | W2 | 4.0 | #11–#13, #17–#19 pass | DONE |
+| W3.4 | RegressionRunner + fixtures | P0 | W2 | 1.5 | #14, #20 pass | DONE |
+| W3.5 | Validators; baselines B1, B3, B4 | P1 | W3.2 | 2.0 | unit tests | DONE |
+| W3.6 | CF localizer + Markdown investigation report | P0 | W3.3, W3.5 | 1.0 | report shows evidence labels | DONE |
 
 ## Week 4: Evaluation & release (committed 9 h)
 | ID | Description | Priority | Depends on | Est. h | Acceptance criteria | Status |
@@ -50,7 +50,7 @@ Also pulled forward from W3.1 (needed by strict replay, approved 2026-11-23): ve
 | W4.5 | NEXT.md (Phase 2A plan) | P2 | W4.3 | 1.0 | written | TODO |
 
 ## Stretch (+16 h, PLAN §18)
-S1 templates T4/T7/T8 (1.0) **DONE in W1.5** · S2 property P2/P3 full (1.5) · S3 classifier (2.0) · S4 B2 (0.5) · S5 LCS alignment (2.0) · S6 two-fault cases (1.0) · S7 decoys (0.5) · S8 Rich timeline (1.5) · S9 CI bench smoke + pip-audit (1.0) · S10 boundary test + JSON-schema export (1.0) · S11 EVALUATION/SECURITY docs (2.0) · S12 demo video (0.5) · S13 robustness tests (1.5). All others `TODO`.
+S1 templates T4/T7/T8 (1.0) **DONE in W1.5** · S2 property P2/P3 full (1.5) · S3 classifier (2.0) · S4 B2 (0.5) · S5 LCS alignment (2.0) · S6 two-fault cases (1.0) **DONE (2 MULTI instances)** · S7 decoys (0.5) **DONE (8 decoy-only + 8 decoy+F4)** · S8 Rich timeline (1.5) · S9 CI bench smoke + pip-audit (1.0) · S10 boundary test + JSON-schema export (1.0) · S11 EVALUATION/SECURITY docs (2.0) · S12 demo video (0.5) · S13 robustness tests (1.5). All others `TODO`.
 
 ## Level 2 backlog (after CP5; not scheduled)
 Phase 2A local LLM policy · Phase 2B LangGraph adapter · Phase 2C FastAPI + React · SQLite store · ddmin · regression management · security suite · OTel export.
@@ -73,3 +73,10 @@ Phase 2A local LLM policy · Phase 2B LangGraph adapter · Phase 2C FastAPI + Re
 | 2026-11-23 (W2) | fidelity sweep: 8 templates × {v1, v2} × {none, lost_ack, pre_exec timeout, corrupt total} recorded then strictly replayed | 64/64 VERIFIED, 64/64 fidelity exact, 660 boundary events, 0 policy calls (recorded outcomes: 52 PASS / 12 FAIL) |
 | 2026-11-23 (W2) | `/usr/bin/time -l atrace replay <lost-ack run>` | VERIFIED; max RSS 39,993,344 bytes (~40 MB), 0.16 s |
 | 2026-11-23 (W2) | `atrace replay <v2 run> --policy v1` | CONFIG_MISMATCH, exit 3 |
+| 2026-11-23 (W3) | baseline before Week 3 (HEAD = origin/main = 5ba1709): ruff, mypy, `HYPOTHESIS_PROFILE=ci pytest --cov` | clean; 236 passed; 96%; 23 Week 2 acceptance tests pass |
+| 2026-11-23 (W3) | `uv run ruff check .` / `ruff format --check .` / `mypy` (52 files) | all clean |
+| 2026-11-23 (W3) | `HYPOTHESIS_PROFILE=ci uv run pytest --cov=agenttrace` | 306 passed; total coverage 94% |
+| 2026-11-23 (W3) | `atrace bench generate` then `atrace bench verify` | 67 instances, 0 rejected (CAUSAL 40 = 38 single + 2 MULTI; MASKED 11; CLEAN 8; DECOY_ONLY 8); 36 causal with symptom distance ≥ 1; files equal a fresh regeneration |
+| 2026-11-23 (W3) | experiment at the injection site of every CAUSAL single-site instance (default request + same-type placebo) | 38/38 repair observed, 38/38 placebo valid |
+| 2026-11-23 (W3) | regression of the 4 F5 baselines with candidate v2 | 4/4 FAIL → DETERMINISTIC_PASS (FIXED), 2/2 runs each |
+| 2026-11-23 (W3) | PRELIMINARY dev-split localization (16 CAUSAL single-site; test split untouched) | Top-1: B1 8, B3 8, B4 13, CF 16; Top-3: B1 8, B3 9, B4 16, CF 16; CF replays 8–16 per run (182 total); max RSS ~37 MB |

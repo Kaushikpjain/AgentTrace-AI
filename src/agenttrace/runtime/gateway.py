@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
@@ -21,6 +22,7 @@ from agenttrace.trace.fingerprint import fingerprint
 from agenttrace.trace.ids import new_span_id
 from agenttrace.trace.schema import (
     Boundary,
+    DeltaOp,
     Divergence,
     Event,
     EventStatus,
@@ -59,6 +61,21 @@ def _to_response(result: ToolResult) -> ToolResponse:
 
 def _dump(model: BaseModel) -> Any:
     return to_json_value(model)
+
+
+@dataclass(frozen=True)
+class ToolExecution[S: BaseModel]:
+    """Result of lifecycle stages S1-S4 (before post-execution faults)."""
+
+    state: S  # resulting state (the working copy if committed, else the input state)
+    before_hash: str
+    after_hash: str
+    executed: bool
+    committed: bool
+    delta: tuple[DeltaOp, ...]
+    raw: ToolResponse | None  # raw tool result; None if not executed
+    response: ToolResponse  # input to S5 (raw, or the S1/S2 response)
+    pre_applications: tuple[FaultApplication, ...]
 
 
 class BoundaryGateway[S: BaseModel]:
@@ -159,6 +176,7 @@ class BoundaryGateway[S: BaseModel]:
                 request_fp=fingerprint(request),
                 response=delivered_json,
                 response_fp=fingerprint(delivered_json),
+                intervened=self._is_intervened(seq),
             )
         )
         self._ledger.append(  # D4 (privileged)
@@ -196,6 +214,62 @@ class BoundaryGateway[S: BaseModel]:
         """Called when the agent loop ends normally (no-op in RECORD)."""
 
     # ------------------------------------------------------------------ S1-S7
+    def lifecycle(
+        self, name: str, args: Any, ctx: ToolContext, hook: FaultHook, state: S
+    ) -> ToolExecution[S]:
+        """S1-S4 against ``state`` (never mutated): validate, pre-execution faults, execute on a
+        working copy, commit/roll back. Returns the resulting state without installing it."""
+        before_hash = fingerprint(state)
+        spec = self._tools.get(name)
+        if spec is None:  # S1
+            response = ToolResponse.error_response("UNKNOWN_TOOL", f"unknown tool {name!r}")
+            return ToolExecution(
+                state, before_hash, before_hash, False, False, (), None, response, ()
+            )
+        try:
+            parsed = spec.args_model.model_validate(args)
+        except ValidationError as exc:
+            response = ToolResponse.error_response("INVALID_ARGUMENTS", _validation_message(exc))
+            return ToolExecution(
+                state, before_hash, before_hash, False, False, (), None, response, ()
+            )
+        prevented, pre_apps = hook.pre_execution(ctx)  # S2
+        if prevented is not None:
+            return ToolExecution(
+                state, before_hash, before_hash, False, False, (), None, prevented, tuple(pre_apps)
+            )
+        working = state.model_copy(deep=True)  # S3 (isolated working copy)
+        try:
+            result = spec.fn(working, parsed)
+        except Exception as exc:  # tool bug -> structured error, no commit
+            result = ToolResult.failure("TOOL_EXCEPTION", type(exc).__name__)
+        raw = _to_response(result)
+        working_hash = fingerprint(working)
+        if spec.mutating:  # S4
+            if result.ok and working_hash != before_hash:
+                delta = tuple(json_diff(to_json_value(state), to_json_value(working)))
+                return ToolExecution(
+                    working, before_hash, working_hash, True, True, delta, raw, raw, tuple(pre_apps)
+                )
+        elif working_hash != before_hash:
+            raise ReadOnlyToolMutatedState(f"read-only tool {name!r} mutated state")
+        return ToolExecution(
+            state, before_hash, before_hash, True, False, (), raw, raw, tuple(pre_apps)
+        )
+
+    def _tool_hook(self, seq: int) -> FaultHook:
+        """Fault hook for this tool event (counterfactual replay may disable it at the target)."""
+        return self._hook
+
+    def _transform_delivered(
+        self, seq: int, ctx: ToolContext, delivered: ToolResponse, execution: ToolExecution[S]
+    ) -> ToolResponse:
+        """After S5: counterfactual OBSERVATION_REPLACEMENT replaces the delivered value here."""
+        return delivered
+
+    def _is_intervened(self, seq: int) -> bool:
+        return False
+
     def call_tool(
         self, decision: Decision, *, step_index: int, parent_span_id: str
     ) -> ToolResponse:
@@ -217,56 +291,14 @@ class BoundaryGateway[S: BaseModel]:
             occurrence=occurrence,
             attempt=attempt,
         )
-
-        before_hash = self.state_hash()
-        after_hash = before_hash
-        executed = False
-        committed = False
-        delta: list[Any] = []
-        raw: ToolResponse | None = None
-        applications: list[FaultApplication] = []
-        response: ToolResponse
-
-        spec = self._tools.get(name)
-        parsed: BaseModel | None = None
-        if spec is None:  # S1
-            response = ToolResponse.error_response("UNKNOWN_TOOL", f"unknown tool {name!r}")
-        else:
-            try:
-                parsed = spec.args_model.model_validate(args)
-            except ValidationError as exc:
-                response = ToolResponse.error_response(
-                    "INVALID_ARGUMENTS", _validation_message(exc)
-                )
-
-        if spec is not None and parsed is not None:
-            prevented, pre_apps = self._hook.pre_execution(ctx)  # S2
-            applications.extend(pre_apps)
-            if prevented is not None:
-                response = prevented
-            else:
-                working = self._state.model_copy(deep=True)  # S3 (isolated working copy)
-                try:
-                    result = spec.fn(working, parsed)
-                except Exception as exc:  # tool bug -> structured error, no commit
-                    result = ToolResult.failure("TOOL_EXCEPTION", type(exc).__name__)
-                executed = True
-                raw = _to_response(result)
-                working_hash = fingerprint(working)
-                if spec.mutating:  # S4
-                    if result.ok and working_hash != before_hash:
-                        delta = json_diff(to_json_value(self._state), to_json_value(working))
-                        self._state = working  # atomic commit (single reference swap)
-                        committed = True
-                        after_hash = working_hash
-                elif working_hash != before_hash:
-                    raise ReadOnlyToolMutatedState(f"read-only tool {name!r} mutated state")
-                response = raw
-
-        delivered, post_apps = self._hook.post_execution(ctx, response)  # S5
-        applications.extend(post_apps)
+        hook = self._tool_hook(seq)
+        execution = self.lifecycle(name, args, ctx, hook, self._state)  # S1-S4
+        self._state = execution.state  # atomic commit (single reference swap) or unchanged
+        delivered, post_apps = hook.post_execution(ctx, execution.response)  # S5
+        delivered = self._transform_delivered(seq, ctx, delivered, execution)
+        applications = (*execution.pre_applications, *post_apps)
         delivered_json = _dump(delivered)
-        raw_json = _dump(raw) if raw is not None else None
+        raw_json = _dump(execution.raw) if execution.raw is not None else None
 
         event = Event(
             span_id=new_span_id(),
@@ -283,20 +315,21 @@ class BoundaryGateway[S: BaseModel]:
             response=delivered_json,
             response_fp=fingerprint(delivered_json),
             state=StateTransition(
-                before_hash=before_hash,
-                after_hash=after_hash,
-                committed=committed,
-                delta=tuple(delta),
+                before_hash=execution.before_hash,
+                after_hash=execution.after_hash,
+                committed=execution.committed,
+                delta=execution.delta,
             ),
             attempt=attempt,
+            intervened=self._is_intervened(seq),
         )
         entry = LedgerEntry(
             seq=seq,
             boundary=Boundary.TOOL,
-            executed=executed,
+            executed=execution.executed,
             raw_output=raw_json,
             raw_output_fp=fingerprint(raw_json) if raw_json is not None else None,
-            fault_applications=tuple(applications),
+            fault_applications=applications,
         )
         self._events.append(event)  # S6/S7 (observable)
         self._ledger.append(entry)  # S7 (privileged)

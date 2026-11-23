@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from agenttrace.env.support.scenario import TaskSpec
-from agenttrace.policies.support_scripted import ScriptedSupportPolicy
+from agenttrace.policies.support_scripted import PolicyVersion, ScriptedSupportPolicy
 from agenttrace.runtime.types import Decision, Observation
 
 
@@ -23,10 +23,14 @@ class ReferencePolicy(Protocol):
 
 
 class GoldSupportReference:
-    """The gold trajectory generator for support scenarios: the corrected ``v2`` policy."""
+    """Fault-free decision function of a scripted support policy version (default ``v2``).
 
-    def __init__(self) -> None:
-        self._policy = ScriptedSupportPolicy("v2")
+    For counterfactual references the composition root uses the *recorded* agent's version,
+    so that injected decision faults are the only deviations (REPLAY_SPEC section 10.2).
+    """
+
+    def __init__(self, version: PolicyVersion = "v2") -> None:
+        self._policy = ScriptedSupportPolicy(version)
 
     @property
     def reference_id(self) -> str:

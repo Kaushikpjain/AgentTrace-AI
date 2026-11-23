@@ -51,7 +51,7 @@ All models use `extra="forbid"` and are frozen. `Json` means a JSON-pure value: 
 | `agenttrace_version` | str | package version |
 
 ### Intervention
-`target_seq: int`, `target_logical_key: str`, `boundary: Boundary`, `intervention_type`, `reference_source`, `is_placebo: bool`, `replacement_fp: str`, `expected_semantics: str`.
+`target_seq: int`, `target_logical_key: str`, `boundary: Boundary`, `intervention_type`, `reference_source`, `is_placebo: bool`, `replacement_fp: str?` (optional; the intervened event's `response`/`response_fp` is authoritative), `expected_semantics: str`.
 
 ### Event (observable)
 | Field | Type | Notes |
@@ -111,7 +111,12 @@ All models use `extra="forbid"` and are frozen. `Json` means a JSON-pure value: 
 | `CORRUPT_OUTPUT` (F3) | POST_EXECUTION | `path` (list of keys/indices into the delivered response), `value` (Json) | replaces the value at `path`; no-op (and no application recorded) if the path does not exist |
 | `REPLACE_DECISION` | DECISION | `decision` (a Decision object) | delivers the given decision instead of the raw one |
 
-F1, F2, F4 and D1 are added in Week 3.
+| `WRONG_TOOL` (F1) | DECISION | `tool`, `args` (Json object) | if the raw decision is a tool call to a *different* tool, deliver a call to `tool` with `args` instead; otherwise no-op |
+| `WRONG_ARGUMENT` (F2) | DECISION | `tool`, `arg`, `mode` (`drop` / `replace`), `value` (for `replace`) | if the raw decision calls `tool` and has `arg`, drop it or replace its value; otherwise no-op |
+| `WRONG_RETRIEVAL` (F4) | POST_EXECUTION | `data` (Json object: the wrong document) | if the delivered response is OK, replace its `data` with `data`; otherwise no-op |
+| `DECOY_READ` (D1) | DECISION | `tool`, `args` | deliver a harmless read-only call instead of the raw decision; the scripted agent then re-issues its intended call on the next step. Harmlessness is *validated* per instance (decoy-only variant must pass), not assumed |
+
+A "no-op" records no fault application. The benchmark validator rejects instances whose faults never fired.
 
 ### RunFooter
 | Field | Type |
@@ -164,3 +169,13 @@ The chain detects accidental corruption and truncation. **It is not a security c
 - Fault applications, raw outputs and pre-injection values exist only in the ledger.
 - Benchmark labels (`labels.jsonl`, Week 3) are a separate file, never inside a run directory read by localizers.
 - The header's `fault_plan_hash` is an opaque hash; the fault plan itself is stored outside the observable trace.
+
+## 9. Benchmark files (Week 3, `benchmarks/synth_v0/`)
+| File | Audience | Content |
+|---|---|---|
+| `manifest.json` | public | benchmark/generator version, seed, policy version, code fingerprints (tool manifest, policy source, scenario hashes, oracle), split definition, instance-file fingerprints, counts |
+| `instances.jsonl` | evaluation driver | per instance: `instance_id`, `scenario_id`, `split`, `policy_version`, `fault_plan`. The plan is needed to *record* the run; it never reaches localizers, which receive only the recorded observable `Trace`. |
+| `labels.jsonl` | **privileged** (validator and metrics only) | per instance: `label` (`CLEAN`/`CAUSAL`/`MASKED`/`DECOY_ONLY`), operators, injection sites (seq and logical key), decoy seqs, `symptom_seq`, `symptom_distance`, `expected_category`, `confirmed_by_clean_value` |
+| `rejected.jsonl` | public | generated candidates rejected by validation, with reasons |
+
+Localizer modules must not import benchmark label loaders, the store's privileged loaders or the fault layer (test-enforced).

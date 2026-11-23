@@ -132,7 +132,7 @@ class Intervention(_Model):
     intervention_type: InterventionType
     reference_source: ReferenceSource
     is_placebo: bool
-    replacement_fp: str
+    replacement_fp: str | None = None  # the intervened event's response is authoritative
     expected_semantics: str
 
 

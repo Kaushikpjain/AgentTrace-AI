@@ -1,4 +1,5 @@
-"""``atrace`` command-line interface: scenarios, run, show, replay.
+"""``atrace`` command-line interface: scenarios, run, show, replay (+ Week 3 commands in
+``agenttrace.cli_diagnose``).
 
 Exit codes:
 - ``run``: 0 = oracle PASS, 1 = oracle FAIL, 2 = usage or execution error.
@@ -295,6 +296,11 @@ def replay_cmd(
     _print_replay(report, saved_to)
     raise typer.Exit(_REPLAY_EXIT[report.verdict])
 
+
+# Week 3 commands register themselves on ``app`` (inject, intervene, regress, investigate, bench).
+from agenttrace import cli_diagnose as _cli_diagnose  # noqa: E402
+
+__all__ = ["_cli_diagnose", "app"]
 
 if __name__ == "__main__":  # pragma: no cover
     app()

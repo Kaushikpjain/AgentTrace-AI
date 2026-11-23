@@ -23,6 +23,7 @@ from agenttrace.trace.schema import (
     Divergence,
     FaultPlan,
     Integrity,
+    Intervention,
     OracleRef,
     Outcome,
     OutcomeRecord,
@@ -59,7 +60,7 @@ class GatewayFactory[S: BaseModel](Protocol):
     ) -> BoundaryGateway[S]: ...
 
 
-_SUPPORTED_MODES = (RunMode.RECORD, RunMode.REPLAY_STRICT)
+_REPLAYING_MODES = (RunMode.REPLAY_STRICT, RunMode.REPLAY_INTERVENE)
 
 
 def run_episode[S: BaseModel, T: BaseModel](
@@ -69,6 +70,7 @@ def run_episode[S: BaseModel, T: BaseModel](
     mode: RunMode = RunMode.RECORD,
     parent_run_id: str | None = None,
     gateway_factory: GatewayFactory[S] | None = None,
+    intervention: Intervention | None = None,
 ) -> RunRecord:
     """Execute the agent loop through a gateway and assemble a validated RunRecord.
 
@@ -76,10 +78,10 @@ def run_episode[S: BaseModel, T: BaseModel](
     gateway raises DivergenceDetected at the first mismatch; the run then ends with
     status DIVERGED and outcome NOT_EVALUATED (fail closed, REPLAY_SPEC section 5.2).
     """
-    if mode not in _SUPPORTED_MODES:
-        raise NotImplementedError(f"mode {mode} is implemented in a later milestone")
-    if mode is not RunMode.RECORD and gateway_factory is None:
+    if mode in _REPLAYING_MODES and gateway_factory is None:
         raise ValueError(f"mode {mode} requires a replaying gateway factory")
+    if mode in (RunMode.RECORD, RunMode.REGRESSION) and gateway_factory is not None:
+        raise ValueError(f"mode {mode} executes freshly; a replaying gateway is not allowed")
     run_id = new_run_id()
     started_at = utc_now()
     t0 = time.perf_counter()
@@ -101,6 +103,7 @@ def run_episode[S: BaseModel, T: BaseModel](
         run_id=run_id,
         mode=mode,
         parent_run_id=parent_run_id,
+        intervention=intervention,
         config_fingerprint=compute_config_fingerprint(**fingerprint_fields),
         started_at=started_at,
         agenttrace_version=agenttrace.__version__,

@@ -1,0 +1,64 @@
+{
+  "benchmark_version": "synth_v0",
+  "counts": {
+    "by_label": {
+      "CAUSAL": 40,
+      "CLEAN": 8,
+      "DECOY_ONLY": 8,
+      "MASKED": 11
+    },
+    "by_split_label": {
+      "dev:CAUSAL": 16,
+      "dev:CLEAN": 4,
+      "dev:DECOY_ONLY": 4,
+      "dev:MASKED": 6,
+      "test:CAUSAL": 24,
+      "test:CLEAN": 4,
+      "test:DECOY_ONLY": 4,
+      "test:MASKED": 5
+    },
+    "instances": 67,
+    "rejected": 0
+  },
+  "files": {
+    "instances.jsonl": "sha256:f5af7dba4069b9079788c39c1d8a6178c047ece13f1e2cf6101230580411bb7e",
+    "labels.jsonl": "sha256:785912e0a91de9c2fca5f99ae7b8d18827ab72c52ca2a0866d3198fa19d486e2",
+    "rejected.jsonl": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "generator_version": "1",
+  "oracle": {
+    "id": "support-oracle",
+    "version": "1.0"
+  },
+  "policy": {
+    "policy_id": "support-scripted",
+    "policy_version": "v1",
+    "source_hash": "sha256:3f1168c4f0ed68de82c9418d7bf123d161b09deaeb5f3bb5604405aa2a717b66"
+  },
+  "scenarios": {
+    "T1": "sha256:bef0a56efcc769d5b7e65080828f923d8c3f53d586fbb0c0ed1f787764b541bf",
+    "T2": "sha256:add3decdbd3c9591d8b9a8e62504945adfcee7b3b63e5e40ce9387779d914797",
+    "T3": "sha256:38a252f97a35a65623c8db3c96d25de3fb279325870265460fbaa6a58000b611",
+    "T4": "sha256:f8e01f33b19ffaea634d6f2a4f5695a893ccb350208b240f5b9ff98e741a0236",
+    "T5": "sha256:1bd67aaeec338ccbb90c93ce8650d62d61344853f2edad79f4f998da17b08305",
+    "T6": "sha256:73ac9970549d321dd548fcc00dcac0c4dd3e482901afe0464bc0a50a5ab05f78",
+    "T7": "sha256:b328f819aafc8dd786766d7c5b7205686ca6f8ae6c346a198d463226e877be19",
+    "T8": "sha256:ed395554dd565beb5484236dc0fa6b2a93690905b9b3143edf78e672d9726ea7"
+  },
+  "seed": 0,
+  "splits": {
+    "dev": [
+      "T1",
+      "T2",
+      "T3",
+      "T4"
+    ],
+    "test": [
+      "T5",
+      "T6",
+      "T7",
+      "T8"
+    ]
+  },
+  "tool_manifest_hash": "sha256:d8958f1ea6b7ab5862eba6a473b19dce81209b6d55c9ca169cf7e4c9343d13a8"
+}

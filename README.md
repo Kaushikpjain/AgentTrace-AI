@@ -25,12 +25,13 @@ Python 3.12 · uv · Pydantic v2 · Typer + Rich · pytest + Hypothesis · Ruff 
 ## Repository
 ```
 src/agenttrace/   trace/ (schema, canonical JSON, store) · env/support/ (sandbox env, scenarios)
-                  runtime/ (gateway, agent loop) · faults/ (fault plans) · replay/ (strict replay)
-                  policies/ · evals/ · runner.py · cli.py
+                  runtime/ (gateway, agent loop) · faults/ (fault plans) · replay/ (strict,
+                  counterfactual, regression) · localize/ (B1, B3, B4, CF) · bench/ (benchmark)
+                  policies/ · evals/ · runner.py · cli.py · cli_diagnose.py
 examples/         fault_plans/ (example FaultPlan JSON files)
 tests/            unit/ · integration/ · acceptance/ · property/
 docs/             PLAN_v0.2.1 · PRD · ARCHITECTURE · REPLAY_SPEC · TRACE_SCHEMA · TEST_PLAN · TASKS · DECISIONS
-benchmarks/       (Week 3) generated fault instances and labels
+benchmarks/       synth_v0/ validated benchmark (labels.jsonl is privileged)
 ```
 
 ## Development status
@@ -51,7 +52,14 @@ See `docs/TASKS.md` for the verified status of every task.
 - Strict exact replay (`REPLAY_STRICT`): restores the initial state, serves recorded decisions without calling the policy, re-executes sandbox tools with the recorded fault plan, and verifies raw results, state transitions, delivered responses, final state and outcome. It fails closed at the first divergence (request, ordering, missing/extra entries, raw result, state hash, response, outcome) and refuses changed configurations.
 - Fidelity report, and `atrace replay` with integrity, configuration, state and outcome verification.
 
-**Not implemented yet:** counterfactual replay and regression execution (Week 3), remaining fault operators and the benchmark (Week 3), localization metrics (Weeks 3–4).
+**Implemented and tested (Week 3):**
+- Fault operators F1 wrong tool, F2 wrong/invalid arguments, F4 wrong retrieval, D1 decoy read. Each declares its stage and fires deterministically; it records nothing when it doesn't apply.
+- Counterfactual replay (`REPLAY_INTERVENE`): strict prefix, typed **observation** vs **execution** replacement, trusted references only, cassette fence, fresh downstream execution. Every intervention is paired with a same-type placebo, and unfaithful requests return explicit `UNSUPPORTED` results.
+- Regression execution: fresh runs of a candidate agent against the same scenario and environment fixture, never consuming the original cassette.
+- Localizers B1 (earliest visible error), B3 (rule-based), B4 (earliest reference deviation) and CF (placebo-controlled counterfactual), with evidence labels `SUSPICION` / `REFERENCE_DEVIATION` / `INTERVENTIONAL_REPAIR` / `UNSUPPORTED`. A repair is reported as *sufficient to repair this run*, not as a unique cause.
+- AgentTrace-Synth v0: 67 validated instances (40 causal, 11 masked, 8 clean, 8 decoy-only), template-based dev/test split, deterministic regeneration check, privileged labels.
+
+**Not implemented yet (Week 4):** Metric A/B/C benchmark report with confidence intervals, the frozen test-split run, the demo script.
 <!-- STATUS:END -->
 
 ## Installation
@@ -63,7 +71,17 @@ uv run atrace run T1         # run the scripted agent; prints the trace and PASS
 uv run atrace show <run_id>  # reload a saved run and verify its integrity
 uv run atrace run T1 --fault-plan examples/fault_plans/lost_ack_refund.json   # inject a fault
 uv run atrace replay <run_id>  # strict replay: verify state transitions and outcome
+
+# Week 3: fault injection, counterfactuals, regression, investigation
+uv run atrace bench list --split dev            # benchmark instance ids (labels stay private)
+uv run atrace inject T1-D1+F4                   # record a benchmark instance (decoy + wrong retrieval)
+uv run atrace intervene <run_id> --seq 11 --type execution   # intervention + same-type placebo
+uv run atrace investigate <run_id> --markdown report.md      # B1, B3, B4, CF ranking + evidence
+uv run atrace inject T1-F5                      # lost acknowledgement with agent v1
+uv run atrace regress <run_id> --policy v2      # fresh candidate runs, no cassette reuse
+uv run atrace bench verify                      # benchmark files == deterministic regeneration
 ```
+`intervene` exits 0 completed, 3 CONFIG_MISMATCH, 5 UNSUPPORTED, 6 INVALID_COUNTERFACTUAL; `regress` exits 0 on a deterministic candidate PASS, 1 otherwise, 3 on CONFIG_ERROR.
 Runs are saved under `./runs` (override with `--runs-dir` or `ATRACE_RUNS_DIR`). `atrace run` exits 0 on oracle PASS, 1 on FAIL and 2 on errors. `atrace replay` exits 0 VERIFIED, 1 DIVERGED, 3 CONFIG_MISMATCH, 4 INTEGRITY_ERROR (2 = usage / run not found).
 
 ## Testing

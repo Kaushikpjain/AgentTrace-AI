@@ -2,7 +2,7 @@
 
 > This document is **authoritative for replay semantics**. Serialized field definitions are in `TRACE_SCHEMA.md`. Any behaviour change to recording or replay must be made here **before** it is made in code (TASKS.md rule).
 >
-> **Implementation status:** §3–§4 (lifecycles) and §5.1 (RECORD): Week 1. §5.2 (REPLAY_STRICT), §6 (cassette matching), §7 (divergence), §8 (config check), §11 (fidelity) and §13 (report): Week 2. §5.3–§5.4 and §10: Week 3.
+> **Implementation status:** §3–§4 (lifecycles) and §5.1 (RECORD): Week 1. §5.2 (REPLAY_STRICT), §6–§8, §11–§12: Week 2. §5.3 (REPLAY_INTERVENE), §5.4 (REGRESSION), §10 (interventions) and §14 (experiments and localization service): Week 3.
 
 ## 1. Scope
 The contracts cover a single-agent, tool-using runtime whose external interactions all pass through one choke point, the **BoundaryGateway**. The MVP environment is an in-memory, deterministic, synthetic support/order system. Nothing in this spec permits calls to real external systems.
@@ -84,7 +84,9 @@ Decisions have **no state transition** (`state = null`).
 
 **Phases.**
 1. **Prefix** (`seq < target_seq`): exactly §5.2. Any divergence → `status=INVALID_COUNTERFACTUAL`, `reason=prefix_diverged`.
-2. **Intervention** (`seq = target_seq`): the live request must match *R*'s request at the target. The replacement is applied per §10.1, and the intervention record is written to the header and marked `intervened=true` on the event.
+2. **Intervention** (`seq = target_seq`): the live request must match *R*'s request at the target; the recorded entry is consumed. The replacement is applied per §10.1, and the intervention record is written to the header and marked `intervened=true` on the event. For tool targets the ledger keeps the truthful raw result and the fault applications of the execution that actually ran. The delivered replacement is the event's `response` (authoritative). `header.intervention.replacement_fp` is optional, because for `REFERENCE_TOOL` the value is only known when the target is reached.
+   - OBSERVATION at a tool: the original lifecycle (with its faults) runs, so the state transition is the original one. Only the delivered value is replaced.
+   - EXECUTION at a tool: the lifecycle runs with the fault layer disabled for this event (reference) or enabled (placebo).
 3. **Fence:** immediately after the target, the cassette is closed. Any later lookup raises `CassetteFenceViolation`, which is a bug: the run fails and must never be silently caught. Downstream decisions are recomputed by the **live policy**, and downstream tools run live in the sandbox (S1–S7). The fault plan remains active for its other triggers.
 4. **Oracle** on the new final state, with the same oracle id and version.
 
@@ -93,7 +95,7 @@ Decisions have **no state transition** (`state = null`).
 **Invariant:** the new run's prefix events are identical to *R*'s prefix (request/response fingerprints and state hashes), and no recorded response is served at or after the target.
 
 ### 5.4 REGRESSION
-- **Input:** a scenario, an environment fixture (environment-side faults only: `PRE_EXECUTION`/`POST_EXECUTION` stages), a candidate agent configuration, and a repeat count.
+- **Input:** a scenario, an environment fixture, a candidate agent configuration, and a repeat count. When derived from a recorded run, the fixture = the run's fault plan **restricted to `PRE_EXECUTION`/`POST_EXECUTION` faults**. `DECISION`-stage faults simulate agent errors and are dropped, because the candidate agent must be evaluated on its own decisions. Only the original's header and fault plan are read; its events and ledger are never used.
 - **Behaviour:** fresh executions from the scenario's initial state with the fixture applied through the normal lifecycle. **No cassette parameter exists**; no recorded decisions or responses are consulted. The same oracle id and version are used.
 - **Verdict:** `DETERMINISTIC_PASS` / `DETERMINISTIC_FAIL` only if the policy declares itself deterministic **and** ≥2 executions have equal semantic fingerprints. Otherwise `PROBABILISTIC(pass_rate, wilson_ci, n)` (Level 2).
 - A REPLAY_STRICT of an old run under a changed agent returns `CONFIG_MISMATCH`. That result is never reported as "fixed".
@@ -144,9 +146,9 @@ The first divergence ends the replay with `status=DIVERGED` and a `divergence` r
 | Source | Mechanism | Allowed for |
 |---|---|---|
 | `REFERENCE_TOOL` | Re-execute the deterministic sandbox tool with the same args on a **scratch copy** of the same pre-state, with no faults | tool OBSERVATION / EXECUTION replacement |
-| `REFERENCE_POLICY` | The gold reference policy queried with the recorded prefix history | decision OBSERVATION replacement |
+| `REFERENCE_POLICY` | The reference policy registered for the **recorded agent**, queried with the recorded prefix history. For the scripted support agent this is the same scripted policy version: its fault-free decision function (injected decision faults are the only deviations). This is available only because the synthetic agent is scripted; LLM agents have no such reference (→ `UNSUPPORTED(no_trusted_reference)`). | decision OBSERVATION replacement |
 | `ORIGINAL` | The recorded value/execution | placebos only |
-| `INJECTION_CLEAN_VALUE` | The pre-injection value from the ledger/labels | **benchmark validator only**; never localizers |
+| `INJECTION_CLEAN_VALUE` | The pre-injection raw value from the ledger | **benchmark validator only** (the API requires an explicit `allow_privileged=True`); never localizers. OBSERVATION_REPLACEMENT only. |
 
 No reference is ever fabricated. Natural failures without a reference yield `UNSUPPORTED(no_trusted_reference)`.
 
@@ -189,8 +191,25 @@ A strict replay returns a `ReplayReport`:
 
 CLI: `atrace replay <run_id> [--policy vN] [--runs-dir DIR] [--save]`. Exit codes: 0 VERIFIED, 1 DIVERGED, 3 CONFIG_MISMATCH, 4 INTEGRITY_ERROR, 2 usage/not found.
 
-## 13. Test mapping
+## 14. Experiments, evidence and the localization service (Week 3)
+- **Experiment** = one reference intervention plus its same-type placebo at one target. It records: original outcome, intervention outcome/status, placebo outcome/status, target seq and logical key, intervention type, reference source, `placebo_valid` (placebo reproduced the original status, outcome and final state hash), and `repair_observed` (original FAIL and intervention PASS).
+- **Evidence labels** (per step; PLAN §11.3):
+  - `SUSPICION`: heuristic score only;
+  - `REFERENCE_DEVIATION`: the recorded value or transition differs from its trusted reference;
+  - `INTERVENTIONAL_REPAIR`: `repair_observed` **and** `placebo_valid`;
+  - `UNSUPPORTED`: no faithful intervention or reference is possible.
+  
+  Run conclusion: the list of repair sites, or `NOT_ISOLATED`. A repair means *this replacement is sufficient to repair this run*. It is never reported as a unique cause.
+- **Intervention service:** localizers receive the observable `Trace` and an `InterventionService` bound to the privileged record. The service exposes only:
+  - `reference_deviation(seq)` → deviates / consistent / unsupported(reason);
+  - `experiment(seq)` → an experiment result (outcomes, statuses, booleans);
+  - `replays_used`.
+  
+  It never returns ledger contents, raw outputs, fault plans or labels.
+- **Replay cost:** every probe, intervention and placebo is one (partial) replay and is counted.
+
+## 15. Test mapping
 Acceptance tests #1–#21 are defined in PLAN_v0.2.1 §13 and TEST_PLAN.md §4:
 - #1–#10, #15, #16, #21 → §5.2 (`tests/acceptance/test_replay_matrix.py`). Note for #5: with the check order of §5.2 step 4, a changed tool implementation surfaces first as `RAW_RESULT` (the raw result differs before the delivered response is compared).
-- #11–#13, #17–#19 → §5.3 / §10
-- #14, #20 → §5.4
+- #11–#13, #17–#19 → §5.3 / §10 (`tests/acceptance/test_counterfactual_matrix.py`)
+- #14, #20 → §5.4 (same file)

@@ -20,6 +20,11 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 | 014 | FaultPlan as part of the trace contract; pulled into Week 2 | Accepted |
 | 015 | Header included in the integrity hash chain | Accepted |
 | 016 | Strict replay serves decisions and re-executes tools; verdicts and exit codes | Accepted |
+| 017 | Decision reference = the recorded agent's own fault-free policy version | Accepted |
+| 018 | B3 weights fixed a priori; no confidence scores | Accepted |
+| 019 | InterventionService as the only privileged channel for localizers | Accepted |
+| 020 | Benchmark files committed; instances carry fault plans, labels separate | Accepted |
+| 021 | OBSERVATION_REPLACEMENT consistency rule and gateway lifecycle refactor | Accepted |
 
 ---
 
@@ -103,3 +108,21 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 ## ADR-016: Strict replay semantics, verdicts and exit codes
 - **Decision:** strict replay serves decisions from the cassette (the policy is replaced by a guard that raises on use) and re-executes sandbox tools, verifying raw result + fault applications, then state transition, then delivered response. The result is a `ReplayReport` with verdict `VERIFIED` / `DIVERGED` / `CONFIG_MISMATCH` / `INTEGRITY_ERROR`. `atrace replay` exits 0 / 1 / 3 / 4 respectively (2 = usage / not found).
 - **Known limit:** a decision payload altered without affecting later tool requests cannot be detected by replay alone; the integrity chain catches it at load (REPLAY_SPEC §5.2).
+
+## ADR-017: Decision reference = the recorded agent's own fault-free policy
+- **Context:** the gold reference was hard-wired to v2. Every v1 refund decision differs from v2 (no idempotency key), so references would flag non-injected steps everywhere.
+- **Decision:** `REFERENCE_POLICY` for a run is the reference registered for the *recorded* agent (`GoldSupportReference(version)`). Injected decision faults are then the only decision deviations.
+- **Trade-offs / limits:** this is possible only because the agent is scripted. A latent agent bug (e.g. v1's missing idempotency key) is *not* a deviation under this reference; it is found through environment-fault interventions and regression instead. LLM agents will have no such reference (→ UNSUPPORTED).
+
+## ADR-018: B3 weights fixed a priori
+- **Decision:** B3 score = 2·[on the symptom's argument-origin chain] + 3·[validator flag] + 1·[delivered ERROR/TIMEOUT] + 1·[committed a state change]; ties earliest-first. These values were fixed before any benchmark run and are never tuned on the test split. Scores are integers for ranking only. No confidence scores or causal probabilities are reported, because no measurement method for them is defined.
+
+## ADR-019: InterventionService
+- **Decision:** B4 and CF receive an `InterventionService` bound to the privileged record. It exposes only `trace`, `reference_deviation(seq)`, `experiment(seq)` and `replays_used`. Summaries contain statuses, outcomes and booleans, never the counterfactual runs, because their ledgers would reveal fault applications. This is enforced by an AST test and an attribute test. Python cannot make the record truly inaccessible; the guarantee is by construction plus tests.
+
+## ADR-020: Benchmark files
+- **Decision:** `benchmarks/synth_v0/` is committed and must equal a deterministic regeneration (`atrace bench verify`, also a test). `instances.jsonl` contains each instance's fault plan, which is needed to *record* it. Localizers never see it: they receive the recorded observable `Trace` only. `labels.jsonl` is privileged.
+- **Trade-offs:** fault plans in `instances.jsonl` reveal the injected operator to a human reader; the evaluation boundary is the localizer API, not file secrecy.
+
+## ADR-021: Gateway lifecycle refactor; observation consistency rule
+- **Decision:** stages S1–S4 became a pure `BoundaryGateway.lifecycle(name, args, ctx, hook, state)` that returns the resulting state without installing it. New seams: `_tool_hook(seq)`, `_transform_delivered(...)`, `_is_intervened(seq)`. All Week 1–2 tests pass unchanged. `OBSERVATION_REPLACEMENT` with `REFERENCE_TOOL` is refused (`observation_inconsistent_with_state`) whenever the reference execution's `(committed, after_hash)` differs from the original's.

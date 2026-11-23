@@ -14,8 +14,9 @@ from agenttrace.env.support.snapshot import restore
 from agenttrace.env.support.tools import SUPPORT_TOOLS_BY_NAME, support_manifest_hash
 from agenttrace.evals.oracle import ORACLE_REF, evaluate
 from agenttrace.faults.plan import PlanFaultHook, validate_plan
+from agenttrace.policies.reference import GoldSupportReference
 from agenttrace.policies.support_scripted import PolicyVersion, ScriptedSupportPolicy
-from agenttrace.replay.exact import ReplayContext
+from agenttrace.replay.exact import ReferenceDecider, ReplayContext
 from agenttrace.runtime.faults import NoFaults
 from agenttrace.runtime.loop import EpisodeSpec, run_episode
 from agenttrace.runtime.types import Policy
@@ -117,4 +118,18 @@ def support_replay_context(
         oracle_ref=ORACLE_REF,
         validate_fault_plan=validate_plan,
         build_episode=build,
+        make_policy=_make_policy,
+        reference_decider=_reference_decider,
     )
+
+
+def _make_policy(policy_id: str, version: str) -> Policy[Any] | None:
+    if policy_id != ScriptedSupportPolicy.policy_id or version not in POLICY_VERSIONS:
+        return None
+    return ScriptedSupportPolicy(version)
+
+
+def _reference_decider(policy_id: str, version: str) -> ReferenceDecider | None:
+    if policy_id != ScriptedSupportPolicy.policy_id or version not in POLICY_VERSIONS:
+        return None
+    return GoldSupportReference(version)

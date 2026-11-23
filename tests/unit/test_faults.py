@@ -42,6 +42,10 @@ def test_every_operator_declares_one_stage() -> None:
         "LOST_ACK",
         "CORRUPT_OUTPUT",
         "REPLACE_DECISION",
+        "WRONG_TOOL",
+        "WRONG_ARGUMENT",
+        "WRONG_RETRIEVAL",
+        "DECOY_READ",
     }
     for op in OPERATORS.values():
         assert isinstance(op.stage, FaultStage)

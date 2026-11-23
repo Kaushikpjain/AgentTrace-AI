@@ -81,3 +81,11 @@ def drop_events(record: RunRecord, seqs: set[int]) -> RunRecord:
     events = [e.model_copy(update={"seq": renumber[e.seq]}) for e in kept]
     ledger = [entry.model_copy(update={"seq": renumber[entry.seq]}) for entry in kept_ledger]
     return rebuild(record, events, ledger)
+
+
+def with_run_id(record: RunRecord, run_id: str) -> RunRecord:
+    """Same recording under a different run id (header and events updated, chain rebuilt)."""
+    header = record.header.model_copy(update={"run_id": run_id})
+    events = [e.model_copy(update={"run_id": run_id}) for e in record.events]
+    renamed = record.model_copy(update={"header": header})
+    return rebuild(renamed, events, record.ledger)

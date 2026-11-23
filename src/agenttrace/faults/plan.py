@@ -76,6 +76,8 @@ class PlanFaultHook:
             fn = OPERATORS[spec.operator].decision_fn
             assert fn is not None
             new = fn(self._params(spec), decision)
+            if new is None:  # operator does not apply to this decision
+                continue
             applications.append(
                 FaultApplication(
                     fault_id=spec.fault_id,

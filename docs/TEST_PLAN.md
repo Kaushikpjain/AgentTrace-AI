@@ -42,15 +42,31 @@ Hypothesis profiles (`tests/conftest.py`): `dev` (max_examples=50, default) and 
 ## 4. Replay acceptance tests (Weeks 2–3)
 Tests #1–#21 as defined in PLAN_v0.2.1 §13 (initial state, recording, modification, expected behaviour, final state, assertion). Mapping to REPLAY_SPEC: see REPLAY_SPEC §12. They live in `tests/acceptance/test_replay_matrix.py`, one test function per row, named `test_rNN_<slug>`. Week 2 implements #1–#10, #15, #16, #21 plus: truncated and unconsumed cassettes (#3b, #3c), changed decision arguments (#4b), changed tool manifest (#5b), changed policy version/source, unknown scenario, outcome divergence and NOT_EVALUATED on divergence. Corrupted-cassette and fault-plan-file tampering are in `tests/unit/test_faults.py`, `tests/unit/test_store.py` and the CLI tests.
 
+## 4b. Week 3 acceptance tests (implemented)
+`tests/acceptance/test_counterfactual_matrix.py` implements:
+- #11–#14 and #17–#20;
+- interventions at the first, middle and final eligible boundaries;
+- missing trusted reference, invalid targets, privileged-reference denial;
+- prefix divergence → INVALID_COUNTERFACTUAL;
+- state isolation across repeated experiments;
+- multiple faults → no single-step repair (NOT_ISOLATED);
+- the live suffix using the real policy (spy);
+- regression dropping DECISION-stage faults, and unknown candidate → CONFIG_ERROR;
+- strict replay still VERIFIED after the Week 3 changes.
+
+Property: `tests/property/test_placebo_property.py` checks that for generated benchmark recordings and any boundary target, the same-type ORIGINAL placebo reproduces status, outcome and final state, with no cassette access after the fence.
+
 ## 5. Fault-injection validation (Week 3)
 - Every fault instance: the clean run passes. Then faulty fail → `CAUSAL`, faulty pass → `MASKED`.
 - `CAUSAL` instances are confirmed by the validator's `INJECTION_CLEAN_VALUE` intervention.
 - Decoy-only variants must pass.
 - Each operator declares exactly one stage, and the declared stage matches the ledger's fault application.
 
-## 6. Benchmark leakage prevention (Week 3)
-- Localizer functions accept only the observable `Trace` type (type-checked and asserted).
-- AST test: `agenttrace.localize` does not import `load_ledger`, label loaders, fault plans or `INJECTION_CLEAN_VALUE`.
+## 6. Benchmark leakage prevention (Week 3, implemented in `tests/unit/test_week3_units.py`)
+- Localizer signatures are `(trace, flags)` (B1, B3) or `(service, flags)` (B4, CF).
+- AST test: `agenttrace.localize` imports neither `agenttrace.bench`, `agenttrace.trace.store`, `agenttrace.faults` nor `agenttrace.runner`. It never references `load_ledger`, `load_record`, `load_fault_plan`, `load_labels`, `ledger`, `fault_plan`, `allow_privileged` or `INJECTION_CLEAN_VALUE`, and never name-mangled service internals.
+- `InterventionService` exposes exactly `trace`, `reference_deviation`, `experiment` and `replays_used`; experiment summaries carry no run records.
+- `instances.jsonl` carries no label fields (`tests/integration/test_benchmark.py`).
 - Splits are by template (dev T1–T4, test T5–T8). A freeze tag is required before the test-split run, and test-split runs are logged.
 
 ## 7. Regression testing (Week 3)

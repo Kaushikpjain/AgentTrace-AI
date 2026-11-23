@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import Any, Protocol
 
 from pydantic import BaseModel
 
@@ -47,6 +47,10 @@ class ReplayVerdict(StrEnum):
     INTEGRITY_ERROR = "INTEGRITY_ERROR"
 
 
+class ReferenceDecider(Protocol):
+    def reference_decision(self, task: Any, history: Sequence[Observation]) -> Decision: ...
+
+
 class LiveCallAttempted(RuntimeError):
     """The policy was invoked during strict replay (must never happen)."""
 
@@ -62,6 +66,10 @@ class ReplayContext:
     validate_fault_plan: Callable[[FaultPlan], None]  # raises ValueError if not replayable
     # (header, fault_plan) -> episode with a FRESH initial state and header.max_steps
     build_episode: Callable[[RunHeader, FaultPlan | None], EpisodeSpec[Any, Any]]
+    # (policy_id, version) -> a live policy, for counterfactual suffixes and regression runs
+    make_policy: Callable[[str, str], Policy[Any] | None] = lambda _pid, _version: None
+    # (policy_id, version) -> trusted decision reference (REFERENCE_POLICY), if one exists
+    reference_decider: Callable[[str, str], ReferenceDecider | None] = lambda _p, _v: None
 
 
 @dataclass(frozen=True)

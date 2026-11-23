@@ -12,12 +12,13 @@ A **modular monolith** (ADR-002): one Python package `agenttrace`, a CLI, no ser
 | `agenttrace.env.support` | Synthetic order-management state model, 5 tools, snapshot/restore/hash, JSON delta, declarative scenarios | Week 1 |
 | `agenttrace.runtime` | `BoundaryGateway` (S1–S7 tool lifecycle, D1–D4 decision lifecycle, fault-hook seam), `AgentLoop`, `Policy`/`FaultHook` protocols, run assembly | Week 1 |
 | `agenttrace.policies` | `ScriptedSupportPolicy` v1/v2, `ReferencePolicy` interface + gold reference | Week 1 |
-| `agenttrace.evals` | Deterministic oracle (Week 1); validators (Week 3) | Week 1 / 3 |
+| `agenttrace.evals` | Deterministic oracle (Week 1); observable-trace validators (`validators.py`, Week 3) | Week 1 / 3 |
 | `agenttrace.cli` | `atrace scenarios`, `run [--fault-plan]`, `show` (Week 1); `replay` (Week 2); `intervene`, `regress`, `investigate`, `bench` (later) | Week 1–2 |
-| `agenttrace.replay` | `Cassette` (positional, consume-once, fence), `StrictReplayGateway`, `replay_strict`/`replay_run`, config check, fidelity (Week 2); CounterfactualRunner, RegressionRunner (Week 3) | Week 2 |
+| `agenttrace.replay` | `Cassette` (positional, consume-once, fence), `StrictReplayGateway`, `replay_strict`/`replay_run`, config check, fidelity (Week 2); `counterfactual` (typed interventions, placebos, reference probe), `regression`, `service` (InterventionService) (Week 3) | Week 2–3 |
 | `agenttrace.faults` | Registered stage-declared operators (T0, F3, F5, `REPLACE_DECISION` in Week 2; F1, F2, F4, D1 in Week 3), `PlanFaultHook`, `validate_plan` | Week 2–3 |
-| `agenttrace.localize` | Baselines B1/B3/B4, CF localizer | Week 3 |
-| `agenttrace.bench` / `report` | Generator, validator, metrics A/B/C, reports | Weeks 3–4 |
+| `agenttrace.localize` | `observe` (symptom, argument-origin chain), baselines B1/B3/B4, CF localizer, Markdown report; reads only `Trace` + `InterventionService` | Week 3 |
+| `agenttrace.bench` | Candidate generator, privileged validator, benchmark files (manifest, instances, labels, rejected); metrics A/B/C in Week 4 | Week 3 |
+| `agenttrace.cli_diagnose` | `inject`, `intervene`, `regress`, `investigate`, `bench generate/verify/list` | Week 3 |
 
 ## 3. Dependency direction
 ```
@@ -31,7 +32,8 @@ cli ─▶ bench/report ─▶ localize ─▶ replay ─▶ runtime ─▶ poli
 - `runtime` imports `trace` and `env.base`/`env.delta` (environment-agnostic), never the CLI or a concrete environment.
 - `runner.py` is the only module that wires the concrete support environment, oracle and policies together. It also builds the support `ReplayContext` consumed by the environment-agnostic replay engine.
 - `replay` depends on `runtime` (it subclasses `BoundaryGateway` through the `_produce_decision` / `_before_tool` / `_after_tool` / `finish` seams) and never on a concrete environment.
-- `localize` must never import the ledger/label loaders (C3; test-enforced from Week 3).
+- `localize` must never import the store's privileged loaders, `bench`, `faults` or `runner` (C3; AST-enforced). It reaches interventions only through `replay.service.InterventionService`.
+- `bench` is privileged (reads ledgers and labels) and may import `localize.observe` for symptom computation; the reverse is forbidden.
 - `env/` and `policies/` must not import nondeterministic or I/O modules (`random`, `time`, `uuid`, `datetime`, `secrets`, `subprocess`, `socket`, HTTP clients). This is test-enforced from Week 1.
 
 ## 4. Data flow (Week 1, RECORD)
@@ -59,6 +61,23 @@ run_episode(mode=REPLAY_STRICT, policy=ReplayPolicyGuard, gateway=StrictReplayGa
    first mismatch ─▶ DivergenceDetected ─▶ status DIVERGED, outcome NOT_EVALUATED
    loop end: unconsumed entries ─▶ TRUNCATED; then final state hash + outcome compared
 ReplayReport(verdict, divergence, fidelity, policy_calls, cassette consumed/entries)
+```
+
+## 4c. Data flow (Week 3)
+```
+REPLAY_INTERVENE (intervene):
+  precheck(target, type, source, privilege, policies) ── fail ─▶ UNSUPPORTED(reason)
+  strict prefix (seq < target) ─▶ target: consume entry, apply typed replacement
+     OBSERVATION: original lifecycle (faults on) + delivered value replaced (consistency-checked)
+     EXECUTION:   lifecycle with faults off (reference) / on (placebo)
+  fence: cassette.close() ─▶ live suffix: real policy + sandbox tools + recorded fault plan
+  oracle on new state ─▶ CounterfactualResult; experiment = intervention + same-type placebo
+REGRESSION: header + env fixture (DECISION faults dropped) ─▶ fresh runs ×N (no cassette)
+  ─▶ DETERMINISTIC_PASS/FAIL (equal semantic fingerprints) ─▶ FIXED / STILL_FAILING / ...
+Localization: Trace + support_flags ─▶ B1/B3;  InterventionService(record) ─▶ B4 (probes), CF
+  (probes + experiments) ─▶ Investigation (ranking, evidence labels, repair sites, replays)
+Benchmark: generate (enumerate templates × operators) ─▶ validate (record, strict replay,
+  faults fired, label, clean-value confirmation) ─▶ manifest/instances/labels/rejected
 ```
 
 ## 5. Execution lifecycle and state ownership
@@ -96,10 +115,15 @@ src/agenttrace/
              gateway.py (S1–S7, D1–D4, replay seams, DivergenceDetected)  loop.py (run_episode)
   faults/    operators.py (registered operators)  plan.py (PlanFaultHook, validate_plan)
   replay/    cassette.py  exact.py (strict replay, config check, report)  fidelity.py
+             counterfactual.py  regression.py  service.py
+  localize/  observe.py  baselines.py (B1, B3, B4)  counterfactual.py (CF)  report.py  types.py
+  bench/     generate.py  validate.py (privileged)  io.py
+  cli_diagnose.py (Week 3 commands)
   policies/  support_scripted.py (v1, v2)  reference.py (ReferencePolicy, gold reference)
-  evals/     oracle.py
+  evals/     oracle.py  validators.py
 tests/       unit/  integration/  acceptance/  property/  helpers.py  hooks.py  plans.py  replay_helpers.py  conftest.py
 examples/fault_plans/  lost_ack_refund.json  timeout_before_refund.json  corrupt_order_total.json
+benchmarks/synth_v0/   manifest.json  instances.jsonl  labels.jsonl (privileged)  rejected.jsonl
 benchmarks/  (Week 3: generated fault instances, labels, splits)
 .github/workflows/ci.yml
 ```

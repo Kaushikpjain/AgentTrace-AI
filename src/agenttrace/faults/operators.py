@@ -13,7 +13,7 @@ from typing import Any
 
 from agenttrace.runtime.types import Decision, ToolResponse
 from agenttrace.trace.canonical import to_json_value
-from agenttrace.trace.schema import FaultStage
+from agenttrace.trace.schema import EventStatus, FaultStage
 
 
 class FaultPlanError(ValueError):
@@ -71,9 +71,75 @@ def corrupt_output(params: dict[str, Any], response: ToolResponse | None) -> Too
     return ToolResponse.model_validate(_set_path(dumped, path, params["value"]))
 
 
+def wrong_retrieval(params: dict[str, Any], response: ToolResponse | None) -> ToolResponse | None:
+    """F4: deliver a plausible but wrong document instead of the retrieved one (OK responses)."""
+    assert response is not None
+    if response.status is not EventStatus.OK:
+        return None
+    return ToolResponse.ok(params["data"])
+
+
 # ---------------------------------------------------------------- decision operators
-def replace_decision(params: dict[str, Any], _decision: Decision) -> Decision:
+# Decision operators return None when they do not apply (no fault application is recorded).
+def replace_decision(params: dict[str, Any], _decision: Decision) -> Decision | None:
     return Decision.model_validate(params["decision"])
+
+
+def wrong_tool(params: dict[str, Any], decision: Decision) -> Decision | None:
+    """F1: the agent selects a different tool (with the given args) than it intended."""
+    if decision.kind != "tool_call" or decision.tool == params["tool"]:
+        return None
+    return Decision(
+        kind="tool_call", tool=params["tool"], args=params["args"], summary=decision.summary
+    )
+
+
+def wrong_argument(params: dict[str, Any], decision: Decision) -> Decision | None:
+    """F2: drop a required argument or replace its value in a call to ``tool``."""
+    if decision.kind != "tool_call" or decision.tool != params["tool"]:
+        return None
+    args = dict(decision.args) if isinstance(decision.args, dict) else {}
+    if params["arg"] not in args:
+        return None
+    if params["mode"] == "drop":
+        del args[params["arg"]]
+    else:
+        if args[params["arg"]] == params["value"]:
+            return None
+        args[params["arg"]] = params["value"]
+    return Decision(kind="tool_call", tool=decision.tool, args=args, summary=decision.summary)
+
+
+def decoy_read(params: dict[str, Any], decision: Decision) -> Decision | None:
+    """D1: a redundant read-only call instead of the intended decision (validated harmless)."""
+    if decision.kind != "tool_call":
+        return None
+    return Decision(kind="tool_call", tool=params["tool"], args=params["args"], summary="decoy")
+
+
+def _validate_tool_args(name: str, params: dict[str, Any]) -> None:
+    if not isinstance(params.get("tool"), str) or not params["tool"]:
+        raise FaultPlanError(f"{name} requires a 'tool' name")
+    if not isinstance(params.get("args"), dict):
+        raise FaultPlanError(f"{name} requires an 'args' object")
+    unknown = set(params) - {"tool", "args"}
+    if unknown:
+        raise FaultPlanError(f"{name}: unknown params {sorted(unknown)}")
+
+
+def _validate_wrong_argument(params: dict[str, Any]) -> None:
+    if not isinstance(params.get("tool"), str) or not isinstance(params.get("arg"), str):
+        raise FaultPlanError("WRONG_ARGUMENT requires 'tool' and 'arg' strings")
+    mode = params.get("mode")
+    if mode not in ("drop", "replace"):
+        raise FaultPlanError("WRONG_ARGUMENT 'mode' must be 'drop' or 'replace'")
+    if mode == "replace" and "value" not in params:
+        raise FaultPlanError("WRONG_ARGUMENT mode 'replace' requires 'value'")
+
+
+def _validate_wrong_retrieval(params: dict[str, Any]) -> None:
+    if not isinstance(params.get("data"), dict) or not params["data"]:
+        raise FaultPlanError("WRONG_RETRIEVAL requires a non-empty 'data' object")
 
 
 def _validate_corrupt(params: dict[str, Any]) -> None:
@@ -105,7 +171,7 @@ class OperatorDef:
     stage: FaultStage
     validate: Callable[[dict[str, Any]], None]
     tool_fn: Callable[[dict[str, Any], ToolResponse | None], ToolResponse | None] | None = None
-    decision_fn: Callable[[dict[str, Any], Decision], Decision] | None = None
+    decision_fn: Callable[[dict[str, Any], Decision], Decision | None] | None = None
 
 
 OPERATORS: dict[str, OperatorDef] = {
@@ -123,6 +189,30 @@ OPERATORS: dict[str, OperatorDef] = {
         ),
         OperatorDef(
             "REPLACE_DECISION", FaultStage.DECISION, _validate_replace, decision_fn=replace_decision
+        ),
+        OperatorDef(
+            "WRONG_TOOL",
+            FaultStage.DECISION,
+            lambda p: _validate_tool_args("WRONG_TOOL", p),
+            decision_fn=wrong_tool,
+        ),
+        OperatorDef(
+            "WRONG_ARGUMENT",
+            FaultStage.DECISION,
+            _validate_wrong_argument,
+            decision_fn=wrong_argument,
+        ),
+        OperatorDef(
+            "WRONG_RETRIEVAL",
+            FaultStage.POST_EXECUTION,
+            _validate_wrong_retrieval,
+            tool_fn=wrong_retrieval,
+        ),
+        OperatorDef(
+            "DECOY_READ",
+            FaultStage.DECISION,
+            lambda p: _validate_tool_args("DECOY_READ", p),
+            decision_fn=decoy_read,
         ),
     )
 }
