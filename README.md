@@ -136,13 +136,8 @@ make verify-bench   # benchmark files == deterministic regeneration
 ```
 Docs: [PRD](docs/PRD.md) · [Architecture](docs/ARCHITECTURE.md) · [Replay spec](docs/REPLAY_SPEC.md) · [Trace schema](docs/TRACE_SCHEMA.md) · [Evaluation](docs/EVALUATION.md) · [Test plan](docs/TEST_PLAN.md) · [Decisions](docs/DECISIONS.md) · [Tasks](docs/TASKS.md) · [Release checklist](docs/RELEASE.md) · [Changelog](CHANGELOG.md)
 
-## Phase 2 roadmap (not started)
-- **2A, real LLM agent (local, free):**
-  - a small quantized local model (≤3B, llama.cpp or Ollama) behind the existing `Policy` interface, with structured decisions;
-  - recorded model decisions, strict replay without a model;
-  - stochastic regression with Wilson intervals, and k-replay counterfactuals.
-- **2B, framework integration:** a minimal LangGraph adapter onto the boundary gateway, and an investigation of a real (non-injected) failure.
-- **2C, developer interface:** a FastAPI read-only API and a React + TypeScript viewer covering the run list, trace timeline with state transitions, counterfactual diff and evidence view.
+## Phase 2 roadmap (proposed, not started)
+Real local LLM agents behind the existing `Policy` interface (2A), a minimal LangGraph adapter (2B), a local FastAPI + React web platform (2C) and a new independent benchmark with LLM agents, natural failures and imperfect references (2D). Plan, estimates, acceptance criteria and approval checkpoints: [`docs/PHASE2_PLAN.md`](docs/PHASE2_PLAN.md).
 
 ## Licence
 Not yet selected. Until a licence is chosen, this code must not be redistributed.

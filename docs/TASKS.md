@@ -65,8 +65,8 @@ Also pulled forward from W3.1 (needed by strict replay, approved 2026-11-23): ve
 ## Stretch (+16 h, PLAN §18)
 S1 templates T4/T7/T8 (1.0) **DONE in W1.5** · S2 property P2/P3 full (1.5) · S3 classifier (2.0) · S4 B2 (0.5) · S5 LCS alignment (2.0) · S6 two-fault cases (1.0) **DONE (2 MULTI instances)** · S7 decoys (0.5) **DONE (8 decoy-only + 8 decoy+F4)** · S8 Rich timeline (1.5) · S9 CI bench smoke + pip-audit (1.0) · S10 boundary test + JSON-schema export (1.0) · S11 EVALUATION/SECURITY docs (2.0) · S12 demo video (0.5) · S13 robustness tests (1.5). All others `TODO`.
 
-## Level 2 backlog (after CP5; not scheduled)
-Phase 2A local LLM policy · Phase 2B LangGraph adapter · Phase 2C FastAPI + React · SQLite store · ddmin · regression management · security suite · OTel export.
+## Phase 2 (proposed; awaiting approval CP-2.0)
+Plan: `docs/PHASE2_PLAN.md` (2A local LLM, 2B LangGraph, 2C web platform, 2D benchmark v1; ≈ 128 h incl. contingency). **Next step after approval:** 2A.0 spike (needs CP-2A.0 to install Ollama and download models). Later backlog: ddmin · regression management · security suite · OTel export.
 
 ## Verification log
 | Date | Command | Result |

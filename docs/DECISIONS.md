@@ -27,7 +27,11 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 | 021 | OBSERVATION_REPLACEMENT consistency rule and gateway lifecycle refactor | Accepted |
 | 022 | Secondary "same-step action" Top-1 (dev review) | Accepted |
 | 023 | Canonical vs. volatile evaluation outputs; guarded held-out split | Accepted |
-| 024 | Private notes kept outside version control; 0.1.0rc1 | Accepted |
+| 024 | Private notes kept outside version control; 0.1.0rc1 | Accepted (version superseded by 027) |
+| 025 | CF `NO_FAILURE` conclusion for passing runs (post-freeze) | Accepted |
+| 026 | Hardened held-out guard, entry-point safeguards, run-log schema 2 (post-freeze) | Accepted |
+| 027 | Version 0.1.0; held-out metrics attributed to the frozen rc1 implementation | Accepted |
+| 028 | Phase 2 plan: provider-independent LLM policy, local-first stack (`docs/PHASE2_PLAN.md`) | **Proposed** (awaiting approval) |
 
 ---
 
@@ -163,3 +167,8 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 - **Decision:** the owner authorised preparing 0.1.0 after full release verification. The version is set to `0.1.0` in `pyproject.toml`, `agenttrace.__version__` and `uv.lock`, in a local commit. The benchmark config fingerprints are unchanged by the bump (test `sha256:7a37fd81…`, dev `sha256:6dab492e…`).
 - **Attribution of results:** the official held-out metrics belong to the frozen 0.1.0rc1 implementation (`bench-freeze-v0`). Post-freeze changes (ADR-025, ADR-026) are recorded separately and have not been evaluated on the held-out split.
 - **Not done without approval:** the `v0.1.0` tag, any push, a GitHub release, a licence (ADR-010), and visibility changes.
+
+## ADR-028: Phase 2 direction (PROPOSED, awaiting approval)
+- **Proposal:** add a provider-independent `LLMProvider` behind a new `LLMPolicy` that implements the existing `Policy` protocol, talking to a local runtime over HTTP with the stdlib. Primary runtime Ollama, fallback llama.cpp `llama-server`; primary model Qwen3-4B-Instruct-2507 (Q4_K_M), fallback Qwen3-1.7B. All of this is subject to the 2A.0 measurements. LangGraph, FastAPI and the web frontend are optional extras; the core dependencies are unchanged. The decision boundary stays the unit of replay, so strict replay never calls a model. Nondeterminism is handled with repeated trials and intervals, never with seeds alone.
+- **Status:** proposed in `docs/PHASE2_PLAN.md`; nothing installed or implemented.
+
