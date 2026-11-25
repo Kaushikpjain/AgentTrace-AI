@@ -1,0 +1,15 @@
+{
+  "run_id": "b9c61e380f3a402f986f7d98b5147bfd",
+  "started_at": "2026-11-23T16:59:52.653003+00:00",
+  "agenttrace_version": "0.1.0rc1",
+  "python": "3.12.14",
+  "platform": "macOS-27.2.1-arm64-arm-64bit",
+  "machine": "arm64",
+  "packages": {
+    "pydantic": "2.14.4",
+    "typer": "0.29.2",
+    "rich": "15.0.0"
+  },
+  "git_head": "eb6d95c19d0ae886cef1b0ae4fca431d6fa29a50",
+  "git_dirty": false
+}
