@@ -1,8 +1,10 @@
 # Changelog
 
-## 0.1.0rc1 (unreleased release candidate)
+## 0.1.0 (2026-11-25, local release commit; not tagged, not published)
 
-Deterministic MVP. No release has been published.
+Deterministic MVP. Version 0.1.0 is the frozen 0.1.0rc1 implementation (`bench-freeze-v0` = `eb6d95c`) plus the post-freeze corrections listed below. **The official held-out metrics belong to the frozen 0.1.0rc1 implementation.** The post-freeze code has not been re-evaluated on the held-out split, and no claim is made that it reproduces those metrics. On the development split it reproduces the frozen `metrics.json` and `table.md` byte for byte (ADR-025).
+
+No release has been published and no release tag exists. The proposed tag `v0.1.0` awaits owner approval.
 
 ### Added
 - **Week 1:**

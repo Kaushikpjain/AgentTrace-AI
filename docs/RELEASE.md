@@ -2,7 +2,7 @@
 
 Status per item. **[x]** = verified locally by an executed command (see TASKS.md verification log); **[ ]** = pending or needs approval.
 
-## Quality gates (local)
+## Quality gates (local; last full run 2026-11-25 at version 0.1.0, see TASKS.md)
 - [x] `uv sync --locked`: isolated install from `uv.lock`
 - [x] `make check`: ruff lint, ruff format check, mypy strict, pytest
 - [x] `make cov`: full suite with coverage (CI Hypothesis profile)
@@ -24,11 +24,11 @@ Status per item. **[x]** = verified locally by an executed command (see TASKS.md
 - [ ] Licence chosen (none added; Apache-2.0 recommended, pending approval)
 - [x] GitHub Actions green on the last pushed commit `eb6d95c` (run 45203007961, conclusion success, read via the GitHub API)
 - [ ] Push of the post-freeze commits approved, and CI observed green on them (currently unverified: not pushed)
-- [ ] Version bumped from `0.1.0rc1` to `0.1.0`; CHANGELOG dated
-- [ ] Release tag `v0.1.0` (no GitHub release published without approval)
+- [x] Version bumped from `0.1.0rc1` to `0.1.0` (pyproject, `__version__`, `uv.lock`); CHANGELOG dated 2026-11-25 (local release commit)
+- [ ] Release tag `v0.1.0`: **proposed** as an annotated tag on the local release commit. It is not created until the owner approves; no GitHub release without approval
 
 ## Content safety
-- [ ] No research-sensitive planning material in the release tree. Pending owner decision: `docs/PLAN_v0.2.1.md`, `docs/archive/` (git history is not rewritten without approval)
+- [ ] No research-sensitive planning material in the release tree. Pending owner decision: `docs/PLAN_v0.2.1.md`, `docs/archive/` (publicly readable on `main`; also included in the sdist built on 2026-11-25). Git history is not rewritten without approval
 - [x] No secrets, credentials or personal data in tracked files (scanned)
 - [x] `private/` is git-ignored
 

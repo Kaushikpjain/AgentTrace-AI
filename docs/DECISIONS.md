@@ -158,3 +158,8 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
   - Each authorized run appends a log entry with `log_schema` 2: kind, command, exit status, started/finished, git head and dirty flag, approved commit, tag, config fingerprint, run id, output directory and all artifact fingerprints. The entry is written even when the run fails. The original entry is never rewritten.
 - **Scope:** these are operational safeguards against accidental use, not a security boundary. Benchmark generation and `bench verify` still record all instances, which label validation requires. `run` and `regress` are not guarded. Tests that exercise replay mechanics on T5–T8 scenarios do not evaluate the benchmark.
 - **Consequence:** at any post-freeze HEAD the guard refuses the test split. A reproducibility check of the official result must run at `bench-freeze-v0`, i.e. with the frozen code and its frozen guard.
+
+## ADR-027: Version 0.1.0 (2026-11-25)
+- **Decision:** the owner authorised preparing 0.1.0 after full release verification. The version is set to `0.1.0` in `pyproject.toml`, `agenttrace.__version__` and `uv.lock`, in a local commit. The benchmark config fingerprints are unchanged by the bump (test `sha256:7a37fd81…`, dev `sha256:6dab492e…`).
+- **Attribution of results:** the official held-out metrics belong to the frozen 0.1.0rc1 implementation (`bench-freeze-v0`). Post-freeze changes (ADR-025, ADR-026) are recorded separately and have not been evaluated on the held-out split.
+- **Not done without approval:** the `v0.1.0` tag, any push, a GitHub release, a licence (ADR-010), and visibility changes.

@@ -60,7 +60,7 @@ Also pulled forward from W3.1 (needed by strict replay, approved 2026-11-23): ve
 | PF.2 | Guard verifies explicit approved commit, annotated tag, HEAD, clean tree, config fingerprint, prior runs | P0 | `tests/unit/test_heldout.py` guard cases pass | DONE |
 | PF.3 | Held-out safeguards on `inject`/`investigate`/`intervene`, `evaluate_split`/`evaluate_instance`/`record_instance`/`regression_check`/`run_benchmark` | P0 | refusal tests pass; dev workflows unchanged | DONE |
 | PF.4 | Run-log schema 2 (command, exit status, commits, config fp, run id, timestamps, artifact fps) | P1 | log tests incl. failed run | DONE |
-| PF.5 | Release 0.1.0 preparation (version, CHANGELOG, checklist) | P1 | full release verification passes | see RELEASE.md |
+| PF.5 | Release 0.1.0 preparation (version, CHANGELOG, checklist) | P1 | full release verification passes | DONE (local commit; tag/push/licence/visibility await owner) |
 
 ## Stretch (+16 h, PLAN §18)
 S1 templates T4/T7/T8 (1.0) **DONE in W1.5** · S2 property P2/P3 full (1.5) · S3 classifier (2.0) · S4 B2 (0.5) · S5 LCS alignment (2.0) · S6 two-fault cases (1.0) **DONE (2 MULTI instances)** · S7 decoys (0.5) **DONE (8 decoy-only + 8 decoy+F4)** · S8 Rich timeline (1.5) · S9 CI bench smoke + pip-audit (1.0) · S10 boundary test + JSON-schema export (1.0) · S11 EVALUATION/SECURITY docs (2.0) · S12 demo video (0.5) · S13 robustness tests (1.5). All others `TODO`.
@@ -107,3 +107,7 @@ Phase 2A local LLM policy · Phase 2B LangGraph adapter · Phase 2C FastAPI + Re
 | 2026-11-25 (PF) | after PF.1–PF.4: `ruff check .`, `ruff format --check .`, `mypy` (58 files), `HYPOTHESIS_PROFILE=ci pytest --cov` | all clean; **343 passed** (+22); total coverage 94%; `bench/heldout.py` 98% |
 | 2026-11-25 (PF) | `atrace bench run --split dev` twice into scratch dirs; compare with each other and with committed `evaluation/synth_v0-dev/` | 6/6 canonical files identical between runs; vs. committed: metrics/config/table/failure_cases identical, `results.jsonl` differs only in CF `conclusion` of the 14 PASS rows (`NOT_ISOLATED` → `NO_FAILURE`) |
 | 2026-11-25 (PF) | `atrace bench run --split test --confirm-single-test-run --approved-commit eb6d95c…` at post-freeze HEAD; `atrace inject T5-F4` | both refused, exit 2; nothing recorded; `TEST_RUNS.log` unchanged |
+| 2026-11-25 (0.1.0) | after version bump (`uv lock --offline`: agenttrace 0.1.0rc1 → 0.1.0): `uv sync --locked`, `make lint`, `ruff format --check`, `mypy`, `HYPOTHESIS_PROFILE=ci pytest --cov` | all clean; 343 passed; coverage 94% |
+| 2026-11-25 (0.1.0) | `make smoke`, `make verify-bench`, `make reproduce-dev`, `DEMO_NONINTERACTIVE=1 make demo`, `make audit` | all exit 0; 6/6 canonical files identical; demo replay VERIFIED, CF repair seq 11, regression FIXED; pip-audit: no known vulnerabilities |
+| 2026-11-25 (0.1.0) | `atrace bench config --split test` / `--split dev` | unchanged: `sha256:7a37fd81…` / `sha256:6dab492e…` |
+| 2026-11-25 (0.1.0) | `uv build` (wheel + sdist) → fresh venv `uv pip install` wheel → `atrace run T1 --no-save` | built `agenttrace-0.1.0`; installed version 0.1.0; T1 PASS, exit 0; `inject T5-F4` refused (exit 2); sdist contains no `private/` files but does contain the planning docs (RELEASE.md) |

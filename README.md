@@ -15,7 +15,7 @@ AgentTrace answers four questions with explicit guarantees:
 
 No novelty is claimed for replay-based failure attribution, which has substantial prior work.
 
-## What works (v0.1.0rc1)
+## What works (v0.1.0)
 - **Tracing:**
   - versioned trace schema with an observable trace and a privileged ledger;
   - canonical JSON and SHA-256 fingerprints;
