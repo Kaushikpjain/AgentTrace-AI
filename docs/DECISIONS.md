@@ -137,6 +137,7 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 
 ## ADR-023: Evaluation outputs and the held-out guard
 - **Decision:** canonical outputs (`metrics.json`, `config.json`, `results.jsonl`, `table.md`, `failure_cases.md`, `canonical_fingerprints.json`) contain no timestamps, run ids, git state or timings, and must be byte-identical across reruns. Volatile metadata goes to `environment.json` and `timings.json`. `bench run --split test` refuses unless the tree is clean, HEAD equals `bench-freeze-v0` and `--confirm-single-test-run` is given. Each test run is appended to `evaluation/TEST_RUNS.log`. Evaluation outputs live in the tracked `evaluation/` directory (`runs/` and `results/` stay ignored).
+- **Fingerprint convention (clarified 2026-11-25):** a canonical artifact fingerprint is `sha256(canonical_bytes(text))`, i.e. the file text encoded as a canonical JSON string, then hashed. It intentionally differs from `shasum` of the raw file; verification must use `agenttrace.trace.fingerprint`.
 
 ## ADR-024: Private notes and versioning
 - **Decision:** the owner's private notes live in a git-ignored `private/` directory and are never referenced by public docs. The package version is `0.1.0rc1` until the owner approves the release. No licence file is added (ADR-010).

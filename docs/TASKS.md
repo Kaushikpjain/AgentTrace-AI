@@ -47,11 +47,11 @@ Also pulled forward from W3.1 (needed by strict replay, approved 2026-11-23): ve
 | W4.2 | `atrace bench run`: canonical vs. volatile outputs, byte-identical reruns | P0 | W4.1 | 2.0 | `make reproduce-dev` identical; subset determinism test | DONE |
 | W4.3 | Correctness checks + failure gallery | P0 | W4.2 | 2.0 | all checks OK on dev; violation fixtures detected | DONE |
 | W4.4 | Dev-split review and fixes (DEV ONLY) | P0 | W4.3 | 1.0 | changes recorded (ADR-022, FREEZE.md) | DONE |
-| W4.5 | Freeze protocol: FREEZE.md, `bench config` fingerprints, guarded test command, run log | P0 | W4.4 | 1.0 | guard refuses without clean tree, tag and flag (tests) | DONE (tag and test run await approval) |
+| W4.5 | Freeze protocol: FREEZE.md, `bench config` fingerprints, guarded test command, run log | P0 | W4.4 | 1.0 | guard refuses without clean tree, tag and flag (tests) | DONE (tag created 2026-11-23 after approval) |
 | W4.6 | Makefile + scripted demo | P1 | W4.2 | 1.5 | `DEMO_NONINTERACTIVE=1 make demo` exits 0 | DONE |
 | W4.7 | README, EVALUATION, WALKTHROUGH, limitations, Phase 2 roadmap | P0 | W4.4 | 3.0 | docs consistent; README commands verified | DONE |
-| W4.8 | Release prep: 0.1.0rc1, CHANGELOG, pinned actions, audit, RELEASE checklist | P1 | W4.7 | 1.0 | audit clean; checklist written | DONE (owner items open) |
-| W4.T | Freeze tag + single held-out test run | P0 | approval | — | owner approval at CP-T | BLOCKED (awaiting approval) |
+| W4.8 | Release prep: 0.1.0rc1, CHANGELOG, pinned actions, audit, RELEASE checklist | P1 | W4.7 | 1.0 | audit clean; checklist written | DONE (owner decisions open: see RELEASE.md) |
+| W4.T | Freeze tag + single held-out test run | P0 | approval | — | owner approval at CP-T; one logged run; results committed after integrity check | DONE (run 2026-11-23; committed `c684c41`) |
 
 ## Stretch (+16 h, PLAN §18)
 S1 templates T4/T7/T8 (1.0) **DONE in W1.5** · S2 property P2/P3 full (1.5) · S3 classifier (2.0) · S4 B2 (0.5) · S5 LCS alignment (2.0) · S6 two-fault cases (1.0) **DONE (2 MULTI instances)** · S7 decoys (0.5) **DONE (8 decoy-only + 8 decoy+F4)** · S8 Rich timeline (1.5) · S9 CI bench smoke + pip-audit (1.0) · S10 boundary test + JSON-schema export (1.0) · S11 EVALUATION/SECURITY docs (2.0) · S12 demo video (0.5) · S13 robustness tests (1.5). All others `TODO`.
@@ -90,3 +90,7 @@ Phase 2A local LLM policy · Phase 2B LangGraph adapter · Phase 2C FastAPI + Re
 | 2026-11-23 (W4) | `make audit` (pip-audit, `--require-hashes`, exported lock) | No known vulnerabilities found |
 | 2026-11-23 (W4) | `DEMO_NONINTERACTIVE=1 ./scripts/demo.sh` | exit 0; replay VERIFIED; CF repair site seq 11; regression FIXED |
 | 2026-11-23 (W4) | GitHub Actions pins resolved via `git ls-remote --tags` | checkout v4.4.0 = 11d5960a…; setup-uv v6.8.0 = d0cc045d… (lightweight tags) |
+| 2026-11-23 (W4.T) | owner approval at CP-T; `git tag -a bench-freeze-v0` on `eb6d95c`; `uv run atrace bench run --split test --confirm-single-test-run` (clean tree, `/usr/bin/time -l`) | exit 0; run `b9c61e38…`; 37 instances; all correctness checks OK; 2.91 s wall, peak RSS ≈ 44 MB; one entry in `TEST_RUNS.log` |
+| 2026-11-25 | held-out artifact integrity: original `agenttrace.trace.fingerprint` recomputation, log, config fingerprint, environment, private backup + its SHA256SUMS, tag resolution | all checks pass (FREEZE.md); results committed exactly as produced (`c684c41`) |
+| 2026-11-25 | GitHub API (read-only, unauthenticated): Actions run 45203007961 | `ci`, push to `main` at `eb6d95c`, status completed, conclusion **success** |
+| 2026-11-25 | GitHub API: repository metadata | **public**, no licence; `docs/PLAN_v0.2.1.md` and `docs/archive/PLAN_v0.2.md` publicly readable on `main`; `private/` not tracked; no tags on the remote |

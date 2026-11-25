@@ -2,7 +2,7 @@
 
 **Deterministic record/replay, controlled counterfactual interventions and failure diagnosis for tool-using AI agents.**
 
-> **Status: v0.1.0rc1 release candidate (deterministic MVP).** Everything listed under *What works* is implemented and tested. Held-out (test-split) results are **not yet available**: the benchmark freeze is pending approval (see `FREEZE.md`).
+> **Status: deterministic MVP, Weeks 1–4 complete.** Everything listed under *What works* is implemented and tested. The benchmark freeze was approved and the held-out test split was evaluated **once** (results below; protocol in `FREEZE.md`). Release blockers and owner decisions: [`docs/RELEASE.md`](docs/RELEASE.md).
 
 ## Why
 When a tool-using agent fails, a trace shows *what* happened, not *which step is responsible*. The first visible error is often not the cause. Re-running a "fixed" agent against replayed responses can falsely report success. Stateful tools and nondeterminism make honest reproduction hard.
@@ -87,26 +87,32 @@ flowchart LR
 ```
 Localizers see only the observable trace and the `InterventionService`, never labels, ledgers or fault plans. This is enforced by tests. Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Replay contracts: [`docs/REPLAY_SPEC.md`](docs/REPLAY_SPEC.md). Data contracts: [`docs/TRACE_SCHEMA.md`](docs/TRACE_SCHEMA.md).
 
-## Results: development split only
-From `evaluation/synth_v0-dev/table.md` (`atrace bench run --split dev`): 30 dev instances, **16 eligible** CAUSAL single-site instances. Each cell is k/n [Wilson 95% CI].
+## Results
+**Held-out test split** (official single run at the freeze `bench-freeze-v0` = `eb6d95c`, frozen 0.1.0rc1 implementation; `evaluation/synth_v0-test/`). 37 instances from the 4 held-out templates, **22 eligible** CAUSAL single-site instances. Each cell is k/n [Wilson 95% CI]; MRR with template-bootstrap CI.
 
-| Method | Top-1 (primary) | Top-3 | Top-1 same-step action (secondary) | Decoy ranked first |
-|---|---|---|---|---|
-| B1 | 8/16 [0.28, 0.72] | 8/16 [0.28, 0.72] | 14/16 [0.64, 0.97] | 0/3 |
-| B3 | 8/16 [0.28, 0.72] | 9/16 [0.33, 0.77] | 14/16 [0.64, 0.97] | 0/3 |
-| B4 | 13/16 [0.57, 0.93] | 16/16 [0.81, 1.00] | 13/16 [0.57, 0.93] | 3/3 |
-| CF | 16/16 [0.81, 1.00] | 16/16 [0.81, 1.00] | 16/16 [0.81, 1.00] | 0/3 |
-| B0 (random) | expected 0.12 | expected 0.35 | | |
+| Method | Top-1 (primary) | Top-3 | MRR | Top-1 same-step action (secondary) | Decoy ranked first |
+|---|---|---|---|---|---|
+| B1 | 10/22 [0.27, 0.65] | 10/22 [0.27, 0.65] | 0.54 [0.39, 0.61] | 20/22 [0.72, 0.97] | 0/2 |
+| B3 | 10/22 [0.27, 0.65] | 13/22 [0.39, 0.77] | 0.58 [0.43, 0.65] | 20/22 [0.72, 0.97] | 0/2 |
+| B4 | 20/22 [0.72, 0.97] | 22/22 [0.85, 1.00] | 0.95 [0.93, 1.00] | 20/22 [0.72, 0.97] | 2/2 |
+| CF | 22/22 [0.85, 1.00] | 22/22 [0.85, 1.00] | 1.00 [1.00, 1.00] | 22/22 [0.85, 1.00] | 0/2 |
+| B0 (random) | expected 0.12 | expected 0.36 | expected 0.33 | | |
 
-- **Interventional repair (CF):** 16/16 failed runs repaired at the injected step. Placebo validity is 30/30, with 0 unsupported steps.
-- **Replay cost:** CF averages 11.4 replays per investigation (max 16); B4 averages 9.0.
-- **Correctness checks:**
-  - strict replay 30/30 VERIFIED;
-  - 0 false repairs on passing runs;
-  - 0 cassette accesses after the intervention fence;
-  - 13 regression runs constructed 0 cassettes.
+- **Interventional repair (CF):** 22/24 CAUSAL runs [0.74, 0.98]; the two unrepaired runs are the multi-fault instances (`NOT_ISOLATED`). Placebo validity 39/39; 0 unsupported steps.
+- **Paired Top-1 (exact McNemar, Holm):** CF vs. B4 2–0 discordant, p = 0.50; CF vs. B1 12–0, p = 0.0015; B4 vs. B1 12–2, p = 0.026. These are descriptive only.
+- **Replay cost:** CF 10.9 replays per investigation on average (max 14); B4 8.7 (max 12).
+- **Correctness checks:** strict replay 37/37 VERIFIED; 0 false repairs on passing runs; 0 cassette accesses after the fence; 17 regression runs built 0 cassettes. Wall time 2.91 s, peak RSS ≈ 44 MB.
 
-**How to read this.** These are *development* results: the metric definitions were reviewed on this split. Top-1 measures agreement with the **injected step**, which is not unique causal attribution. n is small (16) and there are only 4 templates, so intervals are wide and paired tests are descriptive. CF's perfect dev score reflects that **trusted references exist for every step**, because the agent is scripted. Held-out results will be added only after the approved freeze.
+Development split (`evaluation/synth_v0-dev/`, n = 16): Top-1 B1 8/16, B3 8/16, B4 13/16, CF 16/16; repair 16/16; placebo 30/30. Per-operator tables, symptom distance and all intervals: [`docs/EVALUATION.md` §9](docs/EVALUATION.md).
+
+**How to read this.**
+- This is a *scripted synthetic* benchmark, not real-world LLM accuracy.
+- Top-1 measures agreement with the **injected step**, which is not unique causal attribution.
+- CF's advantage over B4 is **not statistically established** (2 discordant instances).
+- The secondary same-step metric narrows the gap: B1 and B3 reach 20/22, like B4.
+- n is small and there are only 4 held-out templates, so the intervals are wide.
+- CF can score perfectly because **trusted references exist for every step** in a scripted agent; that limits generalization.
+- Multi-fault localization remains unresolved.
 
 ## Limitations
 - One synthetic domain and a deterministic scripted agent. Injected faults are not natural LLM failures.
@@ -115,7 +121,7 @@ From `evaluation/synth_v0-dev/table.md` (`atrace bench run --split dev`): 30 dev
 - Single-step interventions cannot isolate jointly sufficient faults (`NOT_ISOLATED`).
 - Probabilistic regression is implemented but untested with a stochastic agent.
 - The integrity chain detects accidental corruption, not a determined adversary.
-- CI has been configured with pinned actions, but a green run on GitHub has not been observed for this release candidate.
+- CI (GitHub Actions, pinned) succeeded on the frozen commit `eb6d95c` (run 45203007961, checked via the GitHub API on 2026-11-25). Commits after it have not been pushed, so CI is unverified for them.
 
 ## Development
 ```bash

@@ -27,5 +27,8 @@ Deterministic MVP. No release has been published.
   - Makefile, scripted terminal demo, evaluation methodology, walkthrough, release checklist.
   - CI with SHA-pinned actions, a benchmark check and a dependency audit.
 
+### Held-out evaluation (frozen implementation)
+- Benchmark freeze `bench-freeze-v0` on `eb6d95c`. The held-out test split was evaluated once (2026-11-23): CF Top-1 22/22, B4 20/22, B1 and B3 10/22 each; repair 22/24; strict replay 37/37; placebo validity 39/39; 0 false repairs. Details are in `docs/EVALUATION.md` §9; artifacts were committed after an integrity check.
+
 ### Known limitations
 See README "Limitations" and `docs/EVALUATION.md` §8.

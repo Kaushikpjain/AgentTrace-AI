@@ -1,6 +1,6 @@
 # Week 4 Plan: Evaluation, Freeze, Demo and Release Readiness (for approval)
 
-> Status: **APPROVED with corrections (2026-11-23); in implementation.** The held-out test split has **not** been run. Nothing in this plan runs it without your explicit approval at checkpoint CP-T.
+> Status: **COMPLETED (2026-11-23).** CP-T was approved and the held-out split was run once at `bench-freeze-v0` (`eb6d95c`); results were committed on 2026-11-25 (`c684c41`). Run-log and result paths are `evaluation/…`, not `results/…` as drafted below. This plan is kept as the historical record; the current status is in `docs/TASKS.md`.
 > Budget: 2–3 h/day on an 8 GB MacBook Air M2. **Committed: 14.5 h implementation + 2 h contingency = 16.5 h** over about 6–7 sessions; **stretch: ~5 h** (deferred first if time runs short).
 > Correction: v0.2 of this plan said "~12.5 h". The task estimates summed to 13.5 h and the session table to 14.5 h. W4.7 is raised to 3.0 h (it now also covers the failure-investigation walkthrough), so both totals are 14.5 h.
 > Baseline: local commit `ac33265` (Week 3), 306 tests passing, benchmark `synth_v0` (67 instances).
