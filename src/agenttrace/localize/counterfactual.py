@@ -8,6 +8,11 @@ OBSERVATION_REPLACEMENT with REFERENCE_POLICY) plus a same-type placebo.
 A step is labelled INTERVENTIONAL_REPAIR only if the intervention turned FAIL into PASS AND the
 placebo reproduced the original run. This means "sufficient to repair this run", never "the
 unique cause". All repair sites are reported.
+
+Run conclusion: ``repair sites: ...`` when at least one step repairs the run; otherwise
+``NOT_ISOLATED`` for a FAILED run, ``NO_FAILURE`` for a passing run (nothing to localize) and
+``NOT_EVALUATED`` when the oracle gave no verdict. Experiments still run on passing runs so that
+false repairs can be detected; ``interventional_repair`` requires FAIL -> PASS, so none can occur.
 """
 
 from __future__ import annotations
@@ -15,7 +20,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from agenttrace.localize.baselines import b3_order, score_step
-from agenttrace.localize.types import NOT_ISOLATED, EvidenceLabel, Investigation, StepAssessment
+from agenttrace.localize.types import (
+    NO_FAILURE,
+    NOT_EVALUATED,
+    NOT_ISOLATED,
+    EvidenceLabel,
+    Investigation,
+    StepAssessment,
+)
 from agenttrace.replay.counterfactual import CounterfactualStatus
 from agenttrace.replay.service import InterventionService, ProbeOutcome
 from agenttrace.trace.schema import Outcome
@@ -82,9 +94,16 @@ def rank_cf(service: InterventionService, flags: Mapping[int, tuple[str, ...]]) 
         ),
     )
     repairs = tuple(a.seq for a in ranking if a.label is EvidenceLabel.INTERVENTIONAL_REPAIR)
-    conclusion = (
-        "repair sites: " + ", ".join(f"seq {s}" for s in repairs) if repairs else NOT_ISOLATED
-    )
+    original = trace.footer.outcome.outcome
+    if repairs:
+        conclusion = "repair sites: " + ", ".join(f"seq {s}" for s in repairs)
+    elif original is Outcome.PASS:
+        # Nothing failed, so "not isolated" would misreport an unresolved failure (ADR-025).
+        conclusion = NO_FAILURE
+    elif original is Outcome.NOT_EVALUATED:
+        conclusion = NOT_EVALUATED
+    else:
+        conclusion = NOT_ISOLATED
     return Investigation(
         run_id=trace.header.run_id,
         method="CF",

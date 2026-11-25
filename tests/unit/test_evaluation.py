@@ -10,7 +10,6 @@ from typing import Any
 import pytest
 
 from agenttrace.bench.metrics import compute_metrics, same_step_action
-from agenttrace.bench.run import test_split_guard as guard
 from agenttrace.bench.stats import (
     cluster_bootstrap_mean,
     dec,
@@ -253,25 +252,7 @@ def test_same_step_action() -> None:
     assert same_step_action(results[0], 8) == {8}  # tool sites match only themselves
 
 
-# ------------------------------------------------------------------ held-out guard
-def _fake_git(status: str = "", head: str = "abc", tag: str | None = "abc") -> Any:
-    def git(args: Any) -> str | None:
-        if args[0] == "status":
-            return status
-        if args[:2] == ["rev-parse", "HEAD"]:
-            return head
-        return tag
-
-    return git
-
-
-def test_test_split_guard() -> None:
-    assert guard(confirmed=True, git=_fake_git()) == []
-    assert "missing --confirm-single-test-run" in guard(confirmed=False, git=_fake_git())
-    assert any("not clean" in p for p in guard(confirmed=True, git=_fake_git(status=" M x")))
-    assert any("does not exist" in p for p in guard(confirmed=True, git=_fake_git(tag=None)))
-    assert any("does not match" in p for p in guard(confirmed=True, git=_fake_git(head="zzz")))
-    assert any("git unavailable" in p for p in guard(confirmed=True, git=lambda _a: None))
+# held-out guard tests moved to tests/unit/test_heldout.py (hardened post-freeze, ADR-026)
 
 
 # ------------------------------------------------------------------ leakage in the eval path

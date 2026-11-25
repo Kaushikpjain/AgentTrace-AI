@@ -7,6 +7,8 @@ Exit codes:
   3 CONFIG_MISMATCH, 5 UNSUPPORTED, 6 INVALID_COUNTERFACTUAL.
 - ``regress``: 0 candidate deterministic PASS, 1 otherwise, 3 CONFIG_ERROR.
 - ``investigate``: 0 ok, 2 usage / not found.
+- ``inject``, ``intervene``, ``investigate`` refuse held-out (test-split) cases with exit 2
+  unless ``--allow-held-out`` is given (operational safeguard, ADR-026).
 - ``bench verify``: 0 files match a fresh regeneration, 1 otherwise.
 """
 
@@ -49,6 +51,29 @@ bench_app = typer.Typer(help="Synthetic benchmark: generate and verify (labels s
 app.add_typer(bench_app, name="bench")
 
 BenchDir = Annotated[Path, typer.Option("--bench-dir", help="Benchmark directory")]
+AllowHeldOut = Annotated[
+    bool,
+    typer.Option("--allow-held-out", help="Deliberately operate on a held-out (test-split) case"),
+]
+
+
+def _guard_held_out(what: str, split: str | None, allow: bool) -> None:
+    from agenttrace.bench.heldout import held_out_refusal
+
+    message = held_out_refusal(what, split)
+    if message is None:
+        return
+    if not allow:
+        console.print(f"[red]Refusing: {message}[/red]")
+        raise typer.Exit(2)
+    console.print(f"[yellow]warning: {what} is held out (--allow-held-out given)[/yellow]")
+
+
+def _guard_run(record: RunRecord, allow: bool) -> None:
+    from agenttrace.bench.heldout import scenario_split
+
+    sid = record.header.scenario.id
+    _guard_held_out(f"run {record.header.run_id} (scenario {sid})", scenario_split(sid), allow)
 
 
 def _load(run_id: str, runs_dir: Path | None) -> RunRecord:
@@ -66,6 +91,7 @@ def inject_cmd(
     instance_id: Annotated[str, typer.Argument(help="Benchmark instance id, e.g. T1-F4")],
     runs_dir: RunsDir = None,
     bench_dir: BenchDir = DEFAULT_DIR,
+    allow_held_out: AllowHeldOut = False,
 ) -> None:
     """Record a benchmark instance (scenario + its fault plan) and save the trace."""
     instances = {i["instance_id"]: i for i in load_instances(bench_dir)}
@@ -73,6 +99,7 @@ def inject_cmd(
     if instance is None:
         console.print(f"[red]unknown instance {instance_id!r}; see `atrace bench list`[/red]")
         raise typer.Exit(2)
+    _guard_held_out(f"instance {instance_id}", instance["split"], allow_held_out)
     plan = FaultPlan.model_validate(instance["fault_plan"]) if instance["fault_plan"] else None
     record = record_scenario(
         load_scenario(instance["scenario_id"]),
@@ -103,6 +130,7 @@ def intervene_cmd(
     ] = "reference",
     runs_dir: RunsDir = None,
     save: Annotated[bool, typer.Option("--save", help="Persist the counterfactual runs")] = False,
+    allow_held_out: AllowHeldOut = False,
 ) -> None:
     """Counterfactual replay at one step, always paired with a same-type placebo."""
     if kind not in ("observation", "execution") or source not in ("reference", "original"):
@@ -111,6 +139,7 @@ def intervene_cmd(
         )
         raise typer.Exit(2)
     record = _load(run_id, runs_dir)
+    _guard_run(record, allow_held_out)
     events = {e.seq: e for e in record.events}
     target = events.get(seq)
     itype = (
@@ -251,6 +280,7 @@ def investigate_cmd(
         Path | None, typer.Option("--markdown", help="Write a Markdown report")
     ] = None,
     top: Annotated[int, typer.Option("--top", min=1)] = 5,
+    allow_held_out: AllowHeldOut = False,
 ) -> None:
     """Rank suspicious steps with baselines and the placebo-controlled counterfactual localizer."""
     wanted = [m.strip().lower() for m in methods.split(",") if m.strip()]
@@ -259,6 +289,7 @@ def investigate_cmd(
         console.print(f"[red]unknown methods {sorted(unknown)}[/red]")
         raise typer.Exit(2)
     record = _load(run_id, runs_dir)
+    _guard_run(record, allow_held_out)
     trace = record.observable()  # localizers only ever see this ...
     flags = support_flags(trace)
     ctx = support_replay_context()
@@ -342,26 +373,67 @@ def bench_run(
     confirm_single_test_run: Annotated[
         bool, typer.Option("--confirm-single-test-run", help="Required for --split test")
     ] = False,
+    approved_commit: Annotated[
+        str | None,
+        typer.Option(
+            "--approved-commit", help="Required for --split test: the full approved freeze commit"
+        ),
+    ] = None,
+    reproducibility_check: Annotated[
+        bool,
+        typer.Option(
+            "--reproducibility-check",
+            help="Test split only: rerun an already-evaluated freeze into a separate --out",
+        ),
+    ] = False,
     skip_regeneration_check: Annotated[
         bool, typer.Option("--skip-regeneration-check", help="Skip benchmark regeneration check")
     ] = False,
 ) -> None:
     """Evaluate a split: Metric A/B/C, replay cost, correctness checks (exit 1 on violations)."""
+    import shlex
+    import sys
+
     from agenttrace.bench.evaluate import METHODS
-    from agenttrace.bench.run import EVALUATION_DIR, run_benchmark, test_split_guard
+    from agenttrace.bench.heldout import (
+        FREEZE_TAG,
+        HeldOutAccessError,
+        HeldOutAuthorization,
+        authorize_test_split,
+    )
+    from agenttrace.bench.run import EVALUATION_DIR, TEST_LOG, experiment_config, run_benchmark
+    from agenttrace.trace.fingerprint import fingerprint as _fp
 
     chosen = [m.strip().upper() for m in methods.split(",") if m.strip()]
     if split not in ("dev", "test") or not chosen or set(chosen) - set(METHODS):
         console.print("[red]--split must be dev|test and --methods a subset of B1,B3,B4,CF[/red]")
         raise typer.Exit(2)
+    official = EVALUATION_DIR / f"synth_v0-{split}"
+    target = out or official
+    authorization: HeldOutAuthorization | None = None
     if split == "test":
-        problems = test_split_guard(confirmed=confirm_single_test_run)
-        if problems:
+        config = experiment_config(split, chosen, bench_dir)
+        config["regeneration_check"] = not skip_regeneration_check
+        try:
+            authorization = authorize_test_split(
+                command=shlex.join(["atrace", *sys.argv[1:]]),
+                confirmed=confirm_single_test_run,
+                approved_commit=approved_commit,
+                config_fp=_fp(config),
+                out_dir=target,
+                official_dir=official,
+                log_path=TEST_LOG,
+                reproducibility_check=reproducibility_check,
+                tag=FREEZE_TAG,
+            )
+        except HeldOutAccessError as exc:
             console.print("[red bold]Refusing to run the held-out test split:[/red bold]")
-            for problem in problems:
+            for problem in exc.problems:
                 console.print(f"  [red]- {problem}[/red]")
-            raise typer.Exit(2)
-    target = out or EVALUATION_DIR / f"synth_v0-{split}"
+            raise typer.Exit(2) from exc
+    elif reproducibility_check or approved_commit or confirm_single_test_run:
+        console.print("[red]held-out options are only valid with --split test[/red]")
+        raise typer.Exit(2)
     metrics = run_benchmark(
         split=split,
         ctx=support_replay_context(),
@@ -369,6 +441,7 @@ def bench_run(
         methods=chosen,
         bench_dir=bench_dir,
         check_regeneration=not skip_regeneration_check,
+        authorization=authorization,
     )
     checks = metrics["checks"]
     console.print((target / "table.md").read_text(encoding="utf-8"))

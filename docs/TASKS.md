@@ -53,6 +53,15 @@ Also pulled forward from W3.1 (needed by strict replay, approved 2026-11-23): ve
 | W4.8 | Release prep: 0.1.0rc1, CHANGELOG, pinned actions, audit, RELEASE checklist | P1 | W4.7 | 1.0 | audit clean; checklist written | DONE (owner decisions open: see RELEASE.md) |
 | W4.T | Freeze tag + single held-out test run | P0 | approval | — | owner approval at CP-T; one logged run; results committed after integrity check | DONE (run 2026-11-23; committed `c684c41`) |
 
+## Post-freeze corrections (after `bench-freeze-v0`; ADR-025, ADR-026)
+| ID | Description | Priority | Acceptance criteria | Status |
+|---|---|---|---|---|
+| PF.1 | CF `NO_FAILURE` conclusion for passing runs | P0 | passing runs never `NOT_ISOLATED`; no false repairs; FAIL semantics unchanged; dev metrics/table identical | DONE |
+| PF.2 | Guard verifies explicit approved commit, annotated tag, HEAD, clean tree, config fingerprint, prior runs | P0 | `tests/unit/test_heldout.py` guard cases pass | DONE |
+| PF.3 | Held-out safeguards on `inject`/`investigate`/`intervene`, `evaluate_split`/`evaluate_instance`/`record_instance`/`regression_check`/`run_benchmark` | P0 | refusal tests pass; dev workflows unchanged | DONE |
+| PF.4 | Run-log schema 2 (command, exit status, commits, config fp, run id, timestamps, artifact fps) | P1 | log tests incl. failed run | DONE |
+| PF.5 | Release 0.1.0 preparation (version, CHANGELOG, checklist) | P1 | full release verification passes | see RELEASE.md |
+
 ## Stretch (+16 h, PLAN §18)
 S1 templates T4/T7/T8 (1.0) **DONE in W1.5** · S2 property P2/P3 full (1.5) · S3 classifier (2.0) · S4 B2 (0.5) · S5 LCS alignment (2.0) · S6 two-fault cases (1.0) **DONE (2 MULTI instances)** · S7 decoys (0.5) **DONE (8 decoy-only + 8 decoy+F4)** · S8 Rich timeline (1.5) · S9 CI bench smoke + pip-audit (1.0) · S10 boundary test + JSON-schema export (1.0) · S11 EVALUATION/SECURITY docs (2.0) · S12 demo video (0.5) · S13 robustness tests (1.5). All others `TODO`.
 
@@ -94,3 +103,7 @@ Phase 2A local LLM policy · Phase 2B LangGraph adapter · Phase 2C FastAPI + Re
 | 2026-11-25 | held-out artifact integrity: original `agenttrace.trace.fingerprint` recomputation, log, config fingerprint, environment, private backup + its SHA256SUMS, tag resolution | all checks pass (FREEZE.md); results committed exactly as produced (`c684c41`) |
 | 2026-11-25 | GitHub API (read-only, unauthenticated): Actions run 45203007961 | `ci`, push to `main` at `eb6d95c`, status completed, conclusion **success** |
 | 2026-11-25 | GitHub API: repository metadata | **public**, no licence; `docs/PLAN_v0.2.1.md` and `docs/archive/PLAN_v0.2.md` publicly readable on `main`; `private/` not tracked; no tags on the remote |
+| 2026-11-25 (PF) | baseline at `bench-freeze-v0` (temporary worktree): `HYPOTHESIS_PROFILE=ci pytest --cov` | 321 passed; total coverage 94% |
+| 2026-11-25 (PF) | after PF.1–PF.4: `ruff check .`, `ruff format --check .`, `mypy` (58 files), `HYPOTHESIS_PROFILE=ci pytest --cov` | all clean; **343 passed** (+22); total coverage 94%; `bench/heldout.py` 98% |
+| 2026-11-25 (PF) | `atrace bench run --split dev` twice into scratch dirs; compare with each other and with committed `evaluation/synth_v0-dev/` | 6/6 canonical files identical between runs; vs. committed: metrics/config/table/failure_cases identical, `results.jsonl` differs only in CF `conclusion` of the 14 PASS rows (`NOT_ISOLATED` → `NO_FAILURE`) |
+| 2026-11-25 (PF) | `atrace bench run --split test --confirm-single-test-run --approved-commit eb6d95c…` at post-freeze HEAD; `atrace inject T5-F4` | both refused, exit 2; nothing recorded; `TEST_RUNS.log` unchanged |

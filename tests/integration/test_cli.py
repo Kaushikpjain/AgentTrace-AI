@@ -265,3 +265,46 @@ def test_bench_generate_to_directory(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0 and "instances" in result.output
     assert (tmp_path / "labels.jsonl").is_file()
+
+
+# ------------------------------------------------------------------ held-out safeguards (ADR-026)
+def test_inject_refuses_held_out_instance(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app, ["inject", "T5-F4", "--runs-dir", str(tmp_path)], terminal_width=200
+    )
+    assert result.exit_code == 2 and "held-out test split" in result.output
+    assert "--allow-held-out" in result.output
+    assert not any(tmp_path.iterdir())  # nothing recorded
+
+
+def test_investigate_and_intervene_refuse_held_out_runs(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from agenttrace.bench import heldout
+
+    run_id = _inject(tmp_path, "T1-F4")  # a dev run, presented as held out below
+    monkeypatch.setattr(heldout, "scenario_split", lambda _sid: "test")
+    investigate = runner.invoke(
+        app, ["investigate", run_id, "--runs-dir", str(tmp_path)], terminal_width=200
+    )
+    assert investigate.exit_code == 2 and "held-out test split" in investigate.output
+    assert "Investigation of" not in investigate.output  # refused before any localization
+    intervene = runner.invoke(
+        app, ["intervene", run_id, "--seq", "7", "--runs-dir", str(tmp_path)], terminal_width=200
+    )
+    assert intervene.exit_code == 2 and "held-out test split" in intervene.output
+    allowed = runner.invoke(
+        app,
+        ["investigate", run_id, "--methods", "b1", "--runs-dir", str(tmp_path), "--allow-held-out"],
+        terminal_width=200,
+    )
+    assert allowed.exit_code == 0 and "warning" in allowed.output
+
+
+def test_investigate_passing_run_reports_no_failure(tmp_path: Path) -> None:
+    run_id = _inject(tmp_path, "T1-clean")
+    result = runner.invoke(
+        app,
+        ["investigate", run_id, "--methods", "cf", "--runs-dir", str(tmp_path)],
+        terminal_width=200,
+    )
+    assert result.exit_code == 0, result.output
+    assert "NO_FAILURE" in result.output and "NOT_ISOLATED" not in result.output

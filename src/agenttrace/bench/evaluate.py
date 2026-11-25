@@ -9,6 +9,9 @@ For each instance of one split:
 
 Labels are joined afterwards by ``agenttrace.bench.metrics``. That separation means the
 localizer path can be audited as label-free.
+
+Held-out instances (split ``test``) are refused without a ``HeldOutAuthorization``
+(``agenttrace.bench.heldout``); this is an operational safeguard, not a security boundary.
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from agenttrace.bench.heldout import HeldOutAuthorization, require_authorization
 from agenttrace.env.support.scenario import load_scenario
 from agenttrace.evals.validators import support_flags
 from agenttrace.localize.baselines import b3_order, rank_b1, rank_b3, rank_b4
@@ -32,7 +36,10 @@ from agenttrace.trace.schema import FaultPlan, FaultStage, RunRecord
 METHODS = ("B1", "B3", "B4", "CF")
 
 
-def record_instance(instance: dict[str, Any]) -> RunRecord:
+def record_instance(
+    instance: dict[str, Any], *, authorization: HeldOutAuthorization | None = None
+) -> RunRecord:
+    require_authorization(instance["split"], authorization)
     plan = FaultPlan.model_validate(instance["fault_plan"]) if instance["fault_plan"] else None
     return record_scenario(
         load_scenario(instance["scenario_id"]),
@@ -86,9 +93,13 @@ class InstanceResult:
 
 
 def evaluate_instance(
-    instance: dict[str, Any], ctx: ReplayContext, methods: Sequence[str]
+    instance: dict[str, Any],
+    ctx: ReplayContext,
+    methods: Sequence[str],
+    *,
+    authorization: HeldOutAuthorization | None = None,
 ) -> InstanceResult:
-    record = record_instance(instance)
+    record = record_instance(instance, authorization=authorization)
     replay = replay_strict(record, ctx)
     trace = record.observable()
     flags = support_flags(trace)
@@ -119,12 +130,18 @@ def evaluate_instance(
     return InstanceResult(instance["instance_id"], data)
 
 
-def regression_check(instance: dict[str, Any], ctx: ReplayContext) -> dict[str, Any] | None:
+def regression_check(
+    instance: dict[str, Any],
+    ctx: ReplayContext,
+    *,
+    authorization: HeldOutAuthorization | None = None,
+) -> dict[str, Any] | None:
     """For instances with environment faults: candidate v2 regression must build no cassette."""
+    require_authorization(instance["split"], authorization)
     plan = instance["fault_plan"]
     if not plan or not any(f["stage"] != FaultStage.DECISION.value for f in plan["faults"]):
         return None
-    record = record_instance(instance)
+    record = record_instance(instance, authorization=authorization)
     before = Cassette.constructed
     report = run_regression(
         record.header, record.fault_plan, record.footer.outcome.outcome, ctx, policy_version="v2"
@@ -145,9 +162,15 @@ def evaluate_split(
     split: str,
     ctx: ReplayContext,
     methods: Sequence[str] = METHODS,
+    *,
+    authorization: HeldOutAuthorization | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Return (label-free instance results, regression checks) for ``split`` only."""
+    require_authorization(split, authorization)
     chosen = [i for i in instances if i["split"] == split]
-    results = [evaluate_instance(i, ctx, methods).data for i in chosen]
-    regressions = [r for i in chosen if (r := regression_check(i, ctx)) is not None]
+    auth = authorization
+    results = [evaluate_instance(i, ctx, methods, authorization=auth).data for i in chosen]
+    regressions = [
+        r for i in chosen if (r := regression_check(i, ctx, authorization=auth)) is not None
+    ]
     return results, regressions

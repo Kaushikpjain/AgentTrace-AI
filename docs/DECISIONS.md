@@ -141,3 +141,20 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 
 ## ADR-024: Private notes and versioning
 - **Decision:** the owner's private notes live in a git-ignored `private/` directory and are never referenced by public docs. The package version is `0.1.0rc1` until the owner approves the release. No licence file is added (ADR-010).
+
+## ADR-025: `NO_FAILURE` conclusion for passing runs (post-freeze, 2026-11-25)
+- **Context:** CF reported `NOT_ISOLATED` for every run without a repair site, including runs that *passed* (14 dev and 13 test runs). For a passing run that wording implies an unresolved failure.
+- **Decision:** CF's run conclusion is now `repair sites: …` if any step repairs the run; otherwise `NOT_ISOLATED` (failed run), `NO_FAILURE` (passing run) or `NOT_EVALUATED` (no oracle verdict). Step labels, rankings, experiments and the false-repair check are unchanged. Baseline conclusions are unchanged.
+- **Effect:** `make reproduce-dev` still produces byte-identical outputs across reruns. Against the committed freeze-time dev artifacts, `metrics.json`, `table.md` and `failure_cases.md` are identical; `results.jsonl` differs only in the CF `conclusion` of the 14 passing runs. The committed held-out artifacts keep the frozen wording.
+
+## ADR-026: Hardened held-out guard and entry-point safeguards (post-freeze, 2026-11-25)
+- **Context:** the frozen guard required only a clean tree, HEAD == the tag and a confirmation flag. Tags are movable. Other entry points (`inject`, `investigate`, `intervene`, Python `evaluate_split`/`run_benchmark`) could touch held-out cases without any guard. The run log recorded only time, commit, metrics fingerprint and run id.
+- **Decision (`agenttrace.bench.heldout`):**
+  - `bench run --split test` requires `--approved-commit <40-hex>` and `--confirm-single-test-run`. The annotated freeze tag must resolve to the approved commit and HEAD must equal it; the tree must be clean.
+  - The config fingerprint must equal the recorded freeze (`KNOWN_FREEZES`; for future freezes, the fingerprint in the annotated tag message).
+  - A second run for an evaluated commit is refused unless it is a `--reproducibility-check` into a new, separate `--out`. Official artifacts are never overwritten.
+  - Python entry points refuse the test split without a `HeldOutAuthorization` minted by `authorize_test_split`.
+  - `inject`, `investigate` and `intervene` refuse held-out (test-split) cases unless `--allow-held-out` is given.
+  - Each authorized run appends a log entry with `log_schema` 2: kind, command, exit status, started/finished, git head and dirty flag, approved commit, tag, config fingerprint, run id, output directory and all artifact fingerprints. The entry is written even when the run fails. The original entry is never rewritten.
+- **Scope:** these are operational safeguards against accidental use, not a security boundary. Benchmark generation and `bench verify` still record all instances, which label validation requires. `run` and `regress` are not guarded. Tests that exercise replay mechanics on T5–T8 scenarios do not evaluate the benchmark.
+- **Consequence:** at any post-freeze HEAD the guard refuses the test split. A reproducibility check of the official result must run at `bench-freeze-v0`, i.e. with the frozen code and its frozen guard.

@@ -82,3 +82,49 @@ def test_cli_rejects_bad_options(tmp_path: Path) -> None:
     runner = CliRunner()
     assert runner.invoke(app, ["bench", "run", "--split", "x"]).exit_code == 2
     assert runner.invoke(app, ["bench", "run", "--methods", "ZZ"]).exit_code == 2
+
+
+def test_passing_runs_conclude_no_failure_without_false_repairs(
+    tmp_path: Path,
+    subset: list[dict],  # type: ignore[type-arg]
+) -> None:
+    import json
+
+    metrics = _run(tmp_path / "p", subset)
+    rows = [
+        json.loads(line) for line in (tmp_path / "p" / "results.jsonl").read_text().splitlines()
+    ]
+    passing = [r for r in rows if r["original_outcome"] == "PASS"]
+    assert passing, "subset must contain passing runs"
+    for row in passing:
+        assert row["methods"]["CF"]["conclusion"] == "NO_FAILURE", row["instance_id"]
+        assert row["methods"]["CF"]["repair_sites"] == []
+    for row in rows:
+        if row["original_outcome"] == "FAIL":
+            assert row["methods"]["CF"]["conclusion"] != "NO_FAILURE"
+    assert metrics["checks"]["false_repairs_on_passing_runs"] == 0
+
+
+def test_cli_test_split_refused_even_with_flags_after_freeze(tmp_path: Path) -> None:
+    log = REPO / "evaluation" / "TEST_RUNS.log"
+    before = log.read_bytes()
+    result = CliRunner().invoke(
+        app,
+        [
+            "bench",
+            "run",
+            "--split",
+            "test",
+            "--confirm-single-test-run",
+            "--approved-commit",
+            "eb6d95c19d0ae886cef1b0ae4fca431d6fa29a50",
+        ],
+        terminal_width=200,
+    )
+    assert result.exit_code == 2, result.output
+    assert "Refusing to run the held-out test split" in result.output
+    assert log.read_bytes() == before
+    repro = CliRunner().invoke(
+        app, ["bench", "run", "--split", "dev", "--reproducibility-check", "--out", str(tmp_path)]
+    )
+    assert repro.exit_code == 2 and "only valid with --split test" in repro.output

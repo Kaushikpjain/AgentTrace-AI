@@ -35,7 +35,7 @@ No novelty is claimed for replay-based failure attribution, which has substantia
 
 - **Localizers:**
   - B1 earliest visible error, B3 rule-based, B4 earliest reference deviation, CF placebo-controlled counterfactual;
-  - evidence labels `SUSPICION` / `REFERENCE_DEVIATION` / `INTERVENTIONAL_REPAIR` / `UNSUPPORTED`, run conclusion `NOT_ISOLATED`.
+  - evidence labels `SUSPICION` / `REFERENCE_DEVIATION` / `INTERVENTIONAL_REPAIR` / `UNSUPPORTED`; CF run conclusion `repair sites`, `NOT_ISOLATED` (failed, no single-step repair) or `NO_FAILURE` (the run passed).
 - **Benchmark and evaluation:**
   - AgentTrace-Synth v0: 67 validated instances, dev/test split by template;
   - `atrace bench run` with Metrics A/B/C, Wilson intervals, byte-identical canonical outputs and built-in correctness checks.
@@ -70,6 +70,9 @@ Exit codes:
 | `intervene` | 0 completed, 5 UNSUPPORTED, 6 INVALID_COUNTERFACTUAL |
 | `regress` | 0 deterministic candidate PASS, 1 otherwise |
 | `bench run` | 1 on any correctness violation; 2 when the guarded test split refuses |
+| `inject`, `investigate`, `intervene` | 2 for a held-out (test-split) case without `--allow-held-out` |
+
+The held-out split is guarded (operational safeguard, not a security control): `bench run --split test` needs `--approved-commit <full hash>` and `--confirm-single-test-run`, at the frozen commit with a clean tree. It refuses a second official run. Details: [`docs/EVALUATION.md` §7](docs/EVALUATION.md).
 
 ## Architecture
 ```mermaid

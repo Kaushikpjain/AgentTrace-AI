@@ -16,7 +16,11 @@ class EvidenceLabel(StrEnum):
     UNSUPPORTED = "UNSUPPORTED"
 
 
-NOT_ISOLATED = "NOT_ISOLATED"
+NOT_ISOLATED = "NOT_ISOLATED"  # the run FAILED and no single-step intervention repaired it
+# The original run did not fail, so there is nothing to localize or repair (post-freeze, ADR-025).
+NO_FAILURE = "NO_FAILURE"
+# The oracle produced no verdict, so repair cannot be judged.
+NOT_EVALUATED = "NOT_EVALUATED"
 
 
 @dataclass(frozen=True)
@@ -40,7 +44,8 @@ class Investigation:
     method: str
     ranking: tuple[StepAssessment, ...]
     symptom_seq: int
-    conclusion: str  # "repair sites: ..." | NOT_ISOLATED | "suspicion only"
+    # CF: "repair sites: ..." | NOT_ISOLATED | NO_FAILURE | NOT_EVALUATED; baselines: fixed text
+    conclusion: str
     repair_sites: tuple[int, ...] = ()
     unsupported: tuple[int, ...] = ()
     replays_used: int = 0

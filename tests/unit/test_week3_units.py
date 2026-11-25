@@ -31,7 +31,7 @@ from agenttrace.localize.baselines import (
 from agenttrace.localize.counterfactual import rank_cf
 from agenttrace.localize.observe import symptom_chain, symptom_seq, tool_index_at_or_after
 from agenttrace.localize.report import render_markdown
-from agenttrace.localize.types import NOT_ISOLATED, EvidenceLabel
+from agenttrace.localize.types import NO_FAILURE, NOT_ISOLATED, EvidenceLabel
 from agenttrace.replay.regression import environment_fixture, wilson_interval
 from agenttrace.replay.service import InterventionService
 from agenttrace.runner import record_scenario, support_replay_context
@@ -247,6 +247,7 @@ def test_cf_on_passing_run_notes_no_repair_possible() -> None:
     cf = rank_cf(InterventionService(record, CTX), {})
     assert cf.notes and not cf.repair_sites
     assert all(s.label is EvidenceLabel.SUSPICION for s in cf.ranking)  # all consistent
+    assert cf.conclusion == NO_FAILURE  # not NOT_ISOLATED: nothing failed (ADR-025)
 
 
 def test_b4_is_fooled_by_decoy_cf_is_not() -> None:

@@ -199,7 +199,7 @@ CLI: `atrace replay <run_id> [--policy vN] [--runs-dir DIR] [--save]`. Exit code
   - `INTERVENTIONAL_REPAIR`: `repair_observed` **and** `placebo_valid`;
   - `UNSUPPORTED`: no faithful intervention or reference is possible.
   
-  Run conclusion: the list of repair sites, or `NOT_ISOLATED`. A repair means *this replacement is sufficient to repair this run*. It is never reported as a unique cause.
+  Run conclusion: the list of repair sites; otherwise `NOT_ISOLATED` for a **failed** run, `NO_FAILURE` for a passing run (nothing to localize; post-freeze, ADR-025) and `NOT_EVALUATED` when the oracle gave no verdict. Experiments still run on passing runs so false repairs stay detectable. A repair means *this replacement is sufficient to repair this run*. It is never reported as a unique cause.
 - **Intervention service:** localizers receive the observable `Trace` and an `InterventionService` bound to the privileged record. The service exposes only:
   - `reference_deviation(seq)` → deviates / consistent / unsupported(reason);
   - `experiment(seq)` → an experiment result (outcomes, statuses, booleans);

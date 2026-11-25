@@ -17,7 +17,7 @@ A **modular monolith** (ADR-002): one Python package `agenttrace`, a CLI, no ser
 | `agenttrace.replay` | `Cassette` (positional, consume-once, fence), `StrictReplayGateway`, `replay_strict`/`replay_run`, config check, fidelity (Week 2); `counterfactual` (typed interventions, placebos, reference probe), `regression`, `service` (InterventionService) (Week 3) | Week 2–3 |
 | `agenttrace.faults` | Registered stage-declared operators (T0, F3, F5, `REPLACE_DECISION` in Week 2; F1, F2, F4, D1 in Week 3), `PlanFaultHook`, `validate_plan` | Week 2–3 |
 | `agenttrace.localize` | `observe` (symptom, argument-origin chain), baselines B1/B3/B4, CF localizer, Markdown report; reads only `Trace` + `InterventionService` | Week 3 |
-| `agenttrace.bench` | Candidate generator, privileged validator, benchmark files (Week 3); `evaluate` (label-free localizer runs), `metrics` + `stats` (Metrics A/B/C, privileged join), `report`, `run` (canonical/volatile outputs, held-out guard) (Week 4) | Week 3–4 |
+| `agenttrace.bench` | Candidate generator, privileged validator, benchmark files (Week 3); `evaluate` (label-free localizer runs), `metrics` + `stats` (Metrics A/B/C, privileged join), `report`, `run` (canonical/volatile outputs) (Week 4); `heldout` (approved-commit guard, authorization tokens, run log; post-freeze ADR-026) | Week 3–4 |
 | `agenttrace.cli_diagnose` | `inject`, `intervene`, `regress`, `investigate`, `bench generate/verify/list` | Week 3 |
 
 ## 3. Dependency direction

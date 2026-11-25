@@ -30,5 +30,11 @@ Deterministic MVP. No release has been published.
 ### Held-out evaluation (frozen implementation)
 - Benchmark freeze `bench-freeze-v0` on `eb6d95c`. The held-out test split was evaluated once (2026-11-23): CF Top-1 22/22, B4 20/22, B1 and B3 10/22 each; repair 22/24; strict replay 37/37; placebo validity 39/39; 0 false repairs. Details are in `docs/EVALUATION.md` §9; artifacts were committed after an integrity check.
 
+### Post-freeze corrections (after `bench-freeze-v0`; not part of the evaluated implementation)
+- CF reports `NO_FAILURE` instead of `NOT_ISOLATED` for passing runs (ADR-025).
+- Hardened held-out guard: explicit `--approved-commit`, annotated-tag and config-fingerprint checks, refusal of second official runs and overwrites, `--reproducibility-check` (ADR-026).
+- `inject`, `investigate` and `intervene` refuse held-out cases without `--allow-held-out`; Python evaluation entry points require a `HeldOutAuthorization`.
+- Test-run log entries (schema 2) record command, exit status, commits, config fingerprint, run id, timestamps and artifact fingerprints.
+
 ### Known limitations
 See README "Limitations" and `docs/EVALUATION.md` §8.

@@ -36,7 +36,7 @@ Localizers never see labels, fault plans, ledgers or clean values. `bench/evalua
 - Experiments by status (COMPLETED / UNSUPPORTED / INVALID_COUNTERFACTUAL / CONFIG_MISMATCH) and by type. Unsupported steps by reason.
 - Replay cost: replays per investigation (probes + interventions + placebos) for B4 and CF.
 
-**Metric C: diagnostic evidence.** Per method: counts of step labels `SUSPICION`, `REFERENCE_DEVIATION`, `INTERVENTIONAL_REPAIR`, `UNSUPPORTED` on the eligible set, and run conclusions on all CAUSAL runs (repair sites vs. `NOT_ISOLATED`).
+**Metric C: diagnostic evidence.** Per method: counts of step labels `SUSPICION`, `REFERENCE_DEVIATION`, `INTERVENTIONAL_REPAIR`, `UNSUPPORTED` on the eligible set, and run conclusions on all CAUSAL runs (repair sites vs. `NOT_ISOLATED`). Since ADR-025 (post-freeze) CF reports `NO_FAILURE` instead of `NOT_ISOLATED` on passing runs. The frozen artifacts keep the old wording, which affects only non-CAUSAL rows.
 
 ## 4. Statistics
 - Every rate is reported as **k/n = rate [Wilson 95% CI]**.
@@ -60,8 +60,9 @@ Localizers never see labels, fault plans, ledgers or clean values. `bench/evalua
 
 ## 7. Held-out protocol
 - Development decisions (metrics, the secondary match, report wording) used the dev split only. The test split was evaluated **exactly once**, at the freeze (2026-11-23, run `b9c61e38…`, see §9 and `FREEZE.md`). Nothing has been tuned on it since; later code changes are post-freeze and listed separately.
-- `atrace bench run --split test` refuses unless the working tree is clean, `HEAD` equals the tag `bench-freeze-v0`, and `--confirm-single-test-run` is given. Each test run is appended to `evaluation/TEST_RUNS.log`.
-- A rerun is permitted only as a reproducibility check and must produce identical canonical outputs.
+- Frozen guard (used for the official run): a clean tree, `HEAD` equal to the tag `bench-freeze-v0`, and `--confirm-single-test-run`.
+- Post-freeze guard (ADR-026): additionally `--approved-commit <full hash>`. The annotated tag must resolve to that commit and HEAD must equal it, the config fingerprint must equal the frozen one, and a second run is refused. Python entry points need a `HeldOutAuthorization`; `inject`/`investigate`/`intervene` need `--allow-held-out` for test-split cases. Log entries (schema 2) record command, exit status, commits, config fingerprint, run id, timestamps and artifact fingerprints.
+- A rerun is permitted only as a reproducibility check (`--reproducibility-check`, separate `--out`, at the frozen commit) and must produce identical canonical outputs.
 - See `FREEZE.md` for the frozen configuration.
 
 ## 8. Threats to validity

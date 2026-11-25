@@ -93,12 +93,14 @@ Property: `tests/property/test_placebo_property.py` checks that for generated be
   - Wilson, exact McNemar, Holm, template bootstrap and summary checked against known values;
   - metrics on hand-built fixtures (Top-1/3, MRR, secondary match, B0, paired counts, Metric B);
   - injected violations are detected;
-  - test-split guard cases (no flag, dirty tree, missing tag, HEAD mismatch, git unavailable);
+  - (moved to `tests/unit/test_heldout.py`, ADR-026) hardened guard cases: no flag, missing/short approved commit, dirty tree, git unavailable, missing / lightweight / moved tag, HEAD ≠ approved commit, config fingerprint mismatch, second official run, overwrite, reproducibility-check directory rules; forged authorization; Python entry points refuse the test split; complete log entries incl. failed runs (synthetic test split from relabelled dev instances); the real repository refuses another official run; read-only integrity of the committed held-out artifacts;
   - an AST check that `bench/evaluate.py` never reads labels or ledgers.
 - `tests/integration/test_bench_run.py`:
   - byte-identical canonical outputs over a 7-instance subset; volatile files carry the run id and timestamps;
   - checks OK and an identical eligible set for every method;
-  - the CLI refuses `--split test` and writes nothing.
+  - the CLI refuses `--split test` and writes nothing, even with `--approved-commit` at a post-freeze HEAD;
+  - passing runs conclude `NO_FAILURE` with no repair sites (ADR-025).
+- `tests/integration/test_cli.py`: `inject`/`investigate`/`intervene` refuse held-out cases without `--allow-held-out`; `investigate` prints `NO_FAILURE` on a passing run.
 
 ## 9. Checkpoint criteria
 CP1–CP5 as in PLAN_v0.2.1 §19. A checkpoint is passed only when its listed tests pass in a run recorded in TASKS.md.
