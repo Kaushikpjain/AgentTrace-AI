@@ -31,3 +31,6 @@ results/
 
 # Private notes. Never committed.
 private/
+
+# Phase 2 experiments: raw per-call logs and model outputs stay local
+experiments/*/raw/

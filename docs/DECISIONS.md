@@ -31,7 +31,7 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 | 025 | CF `NO_FAILURE` conclusion for passing runs (post-freeze) | Accepted |
 | 026 | Hardened held-out guard, entry-point safeguards, run-log schema 2 (post-freeze) | Accepted |
 | 027 | Version 0.1.0; held-out metrics attributed to the frozen rc1 implementation | Accepted |
-| 028 | Phase 2 plan: provider-independent LLM policy, local-first stack (`docs/PHASE2_PLAN.md`) | **Proposed** (awaiting approval) |
+| 028 | Phase 2 plan: provider-independent LLM policy, local-first stack (`docs/PHASE2_PLAN.md`) | Accepted with conditions (CP-2.0, 2026-11-25) |
 | 030 | Distribution excludes planning, private and experiment material | Accepted |
 
 ---
@@ -169,9 +169,9 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 - **Attribution of results:** the official held-out metrics belong to the frozen 0.1.0rc1 implementation (`bench-freeze-v0`). Post-freeze changes (ADR-025, ADR-026) are recorded separately and have not been evaluated on the held-out split.
 - **Not done without approval:** the `v0.1.0` tag, any push, a GitHub release, a licence (ADR-010), and visibility changes.
 
-## ADR-028: Phase 2 direction (PROPOSED, awaiting approval)
+## ADR-028: Phase 2 direction (ACCEPTED with conditions, 2026-11-25)
 - **Proposal:** add a provider-independent `LLMProvider` behind a new `LLMPolicy` that implements the existing `Policy` protocol, talking to a local runtime over HTTP with the stdlib. Primary runtime Ollama, fallback llama.cpp `llama-server`; primary model Qwen3-4B-Instruct-2507 (Q4_K_M), fallback Qwen3-1.7B. All of this is subject to the 2A.0 measurements. LangGraph, FastAPI and the web frontend are optional extras; the core dependencies are unchanged. The decision boundary stays the unit of replay, so strict replay never calls a model. Nondeterminism is handled with repeated trials and intervals, never with seeds alone.
-- **Status:** proposed in `docs/PHASE2_PLAN.md`; nothing installed or implemented.
+- **Status:** CP-2.0 approved with the nine binding conditions of PHASE2_PLAN §1.1: deterministic engine as foundation; provider abstraction independent of Ollama; measured model choice; no LLM in strict replay; explicit nondeterminism handling (§4.1); transparent `UNSUPPORTED`; explicit reference provenance; no hidden reasoning collected or displayed; synth_v0 results independent of Phase 2. CP-2A.0 approved for the feasibility experiment only.
 
 ## ADR-030: Distribution hygiene (2026-11-25)
 - **Context:** hatchling's default sdist included every tracked file, including research-sensitive planning documents.

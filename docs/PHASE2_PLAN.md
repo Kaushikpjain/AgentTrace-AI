@@ -1,6 +1,6 @@
 # Phase 2 Plan: Real GenAI Integration and Product Development
 
-> **Status: PROPOSED (2026-11-25). Not approved and not started.** Nothing in this plan has been installed, downloaded or implemented. Each milestone starts only after its approval checkpoint. ADR-028 records the proposal.
+> **Status (2026-11-25): CP-2.0 APPROVED with conditions (§1.1); CP-2A.0 APPROVED (feasibility experiment only).** No other milestone is approved. 2A.1 and everything after it start only after their own checkpoints. ADR-028 records the direction, ADR-029 the measured model/runtime decision.
 >
 > **Baseline:** v0.1.0 local release commit `229fb5a`, 343 tests passing, total coverage 94%. Deterministic engine: trace schema, JSONL store, sandbox support environment, strict replay, counterfactual replay with placebos, regression, B1/B3/B4/CF localizers, AgentTrace-Synth v0 with its frozen held-out result (`docs/EVALUATION.md` §9).
 >
@@ -21,6 +21,17 @@ Labels used in this plan: **[measured]** = produced by an executed command; **[e
 4. A new, independent evaluation (AgentTrace-Bench v1) with its own dev/test split and freeze, covering LLM agents, natural failures, imperfect and missing references and repeated trials (2D).
 
 **Non-goals (Phase 2).** Hosted deployment, multi-user auth, paid or remote model APIs, models that do not fit in 8 GB, multi-agent systems, OpenTelemetry ingestion, ddmin minimization, LLM-as-judge oracles, and any use of the frozen synth_v0 held-out split for development.
+
+### 1.1 Approval conditions (CP-2.0, binding for all of Phase 2)
+1. The existing deterministic engine remains the foundation; Phase 2 extends it and does not replace it.
+2. The LLM provider abstraction is independent of Ollama. Ollama is one provider implementation, and no Ollama-specific types cross the provider interface.
+3. The final model and runtime are chosen from measurements (2A.0, ADR-029), never from these estimates.
+4. Strict replay never invokes an LLM.
+5. Regression and counterfactual execution explicitly account for nondeterminism (§4.1).
+6. Unsupported interventions are always reported with a reason, never dropped.
+7. Trusted-reference provenance stays explicit, and provenance is not treated as proof of correctness (§4.1).
+8. No hidden model reasoning is collected or displayed. Thinking modes are disabled where possible; any emitted thinking content is discarded (only a flag and a length are kept).
+9. Existing benchmark results (synth_v0, `bench-freeze-v0`) stay independent of Phase 2: they are not re-run, re-tuned or mixed with Phase 2 measurements.
 
 **Invariants (must hold after every milestone)**
 - All existing tests pass unchanged unless an ADR records why a test's contract changed.
@@ -78,8 +89,8 @@ Key design choices (to be confirmed by ADR at each checkpoint):
 ### 3.2 Models (≤ 4B parameters, 4-bit; candidates to verify at 2A.0)
 | Model (instruct) | Params | Approx. Q4_K_M weights [estimate] | Tool calling | Licence [verify at download] | Notes |
 |---|---|---|---|---|---|
-| **Qwen3-4B-Instruct-2507** | 4.0 B | ≈ 2.5 GB | native tool-call template | Apache-2.0 | non-thinking instruct variant: no reasoning trace to store or hide |
-| Qwen3-1.7B | 1.7 B | ≈ 1.1 GB | native template | Apache-2.0 | thinking mode must be disabled |
+| **Qwen3-4B-Instruct-2507** | 4.0 B | 2.50 GB [verified registry size] | native tool-call template [verified] | Apache-2.0 [verified] | non-thinking instruct variant: its template has no thinking section |
+| Qwen3-1.7B | 1.7 B | 1.36 GB [verified registry size] | native template | Apache-2.0 [verified] | hybrid thinking; disabled via the API `think: false` |
 | Phi-4-mini-instruct | 3.8 B | ≈ 2.5 GB | function calling | MIT | alternative primary |
 | Llama-3.2-3B-Instruct | 3.2 B | ≈ 2.0 GB | tool-call template | Llama 3.2 Community Licence (use restrictions) | licence less permissive |
 | Gemma-3-4B-it | 4 B | ≈ 2.5–3 GB | prompt-based | Gemma Terms of Use | no native tool template |
@@ -98,7 +109,7 @@ KV-cache size per token = 2 × layers × KV heads × head dim × 2 bytes (fp16),
 | Model | Weights (Q4_K_M) | KV cache at 4k context | Runtime overhead | **Total resident** |
 |---|---|---|---|---|
 | Qwen3-4B (36 layers, 8 KV heads, dim 128) | ≈ 2.5 GB | ≈ 0.6 GB (≈ 1.2 GB at 8k) | ≈ 0.3–0.5 GB | **≈ 3.4–3.6 GB** (≈ 4.2 GB at 8k) |
-| Qwen3-1.7B (28 layers, 8 KV heads, dim 128) | ≈ 1.1 GB | ≈ 0.5 GB | ≈ 0.3 GB | **≈ 1.9 GB** |
+| Qwen3-1.7B (28 layers, 8 KV heads, dim 128) | 1.36 GB | ≈ 0.5 GB | ≈ 0.3 GB | **≈ 2.2 GB** |
 
 On 8 GB, with macOS, an IDE and a browser using roughly 4 GB, the 4B model fits at a **4k context**. 8k is marginal. Policy: `num_ctx = 4096` by default; history truncation is recorded in the trace; the model unloads when idle; peak RSS of the runtime process is recorded per run. If memory pressure (swap) appears in 2A.0, the default becomes Qwen3-1.7B.
 
@@ -108,22 +119,71 @@ On 8 GB, with macOS, an IDE and a browser using roughly 4 GB, the 4B model fits 
 
 ## 4. Phase 2A: Real local LLM integration (mandatory)
 
-### 2A.0 Spike: runtime, model and feasibility measurement
+### 2A.0 Feasibility experiment (approved; protocol and criteria pre-registered before any run)
+**Pre-checks (2026-11-25, before any download).**
+- Ollama 0.40.16 was already installed (Ollama.app, Apple Silicon); its server listens on `127.0.0.1:11434` only.
+- Free disk: 29 GiB.
+- Memory: 8 GiB RAM, with **4.67 GB of 6 GB swap already in use** and 34% free memory before any model was loaded.
+- Official registry manifests:
+
+| Tag | Model layer | Total download | Licence | Template |
+|---|---|---|---|---|
+| `qwen3:1.7b-q4_K_M` | `sha256:3d0b7905…`, 1,359,279,776 B | 1,359,292,957 B | Apache-2.0 | `<tool_call>`, honours `think` |
+| `qwen3:4b-instruct-2507-q4_K_M` | `sha256:85e4a5b7…`, 2,497,280,480 B | 2,497,293,316 B | Apache-2.0 | `<tool_call>`, no thinking section |
+
+An unrelated model already on disk (`qwen2.5-coder:7b`) is not used or modified.
+
+**Implementation boundary.** The experiment lives in `experiments/llm_feasibility/` (outside `src/`, excluded from distributions). It runs an experimental policy that implements the existing `Policy` protocol through the unchanged `run_episode`, gateway, sandbox tools and oracle. No production module, schema, replay or counterfactual code is changed. Raw per-call logs stay in the git-ignored `experiments/*/raw/`; only small summaries are committed. Results are never mixed with synth_v0.
+
+**Stages.**
+- **A (feasibility, per model).** Local inference; structured tool call; JSON parsing; argument validation (rejection of an invalid call); multi-turn sequential calls; context accounting (prompt tokens vs. `num_ctx`, and a guard that aborts a run before 90% of `num_ctx` instead of letting Ollama truncate silently); timeout path; thinking content absent or discarded; traffic only to 127.0.0.1 (socket guard).
+- **B (pilot, per model).** One run per dev template at temperature 0 plus a cold-load measurement.
+- **C (comparison).** 4 templates (T1–T4) × 2 models × temperatures {0, 0.7} × 5 repetitions = 80 runs. One model is loaded at a time, the smaller model first, and each model is unloaded (`keep_alive: 0`) afterwards.
+
+**Fixed configuration (identical for both models unless noted).**
+- System prompt and tool schemas: same text for both, with schemas generated from the tools' pydantic models; the system prompt states the support procedure in prose.
+- Run limits: `max_steps` from the scenario (12); one bounded repair retry per decision.
+- Sampling: `num_ctx` 4096, `num_predict` 512, `top_p` 0.8, `top_k` 20, `repeat_penalty` 1.0, `seed` = 1000 + repetition (recorded; determinism is not assumed).
+- Timeouts: per-call 120 s, per-run 600 s.
+- Run order: model → repetition → temperature → template.
+- **Unavoidable difference:** `think: false` is sent to Qwen3-1.7B only; the 4B instruct model has no thinking mode.
+
+**Definitions.**
+- *Decision turn*: one model request for the next action.
+- *Syntactically valid*: exactly one tool call with a known name, plus arguments that pass the tool's pydantic schema. A text-only answer counts as valid only after `close_ticket` has succeeded; otherwise it is invalid.
+- *Argument-caused error*: an executed call that returns `VALIDATION_ERROR`, `NOT_FOUND`, `INVALID_AMOUNT` or `AMOUNT_EXCEEDS_ORDER_TOTAL`.
+- *Reference agreement* (semantic, strict): given the run's actual history, the tool matches the decision of the scripted gold reference (v2); when it does, the arguments are compared (amounts numerically; `idempotency_key` and `note` ignored). Legitimate alternative orders count as disagreement, so this is reported, not gated.
+- *Task success*: the oracle verdict is PASS.
+- Runs that are aborted (invalid after retry, timeout, context guard, run cap) count as failures. They are never excluded.
+
+**Selection criteria (pre-specified; not to be relaxed after seeing results).** A model qualifies only if **all** of these hold:
+
+| # | Criterion | Population |
+|---|---|---|
+| S1 | Syntactic validity after ≤ 1 repair retry ≥ 95% of decision turns | all Stage C runs (both temperatures) |
+| S2 | ≥ 95% of executed tool calls free of argument-caused errors | all Stage C runs |
+| S3 | Clean-run task success ≥ 15/20 (75%) **and** ≥ 3/5 for every template | Stage C, temperature 0 |
+| S4 | Warm decision latency median ≤ 15 s and p90 ≤ 30 s | all warm decision calls |
+| S5 | No sustained critical memory pressure (pressure level 4 in > 10% of 1 s samples) and swap growth ≤ 1.0 GB during the model's runs | Stage B + C |
+| S6 | Licence verified Apache-2.0/MIT-compatible; inference traffic only to 127.0.0.1 | — |
+
+- **Rationale for S3:** the scripted agent solves every clean dev task. Phase 2 needs clean baselines that mostly succeed, so that recorded failures and repairs are informative. Below 75%, failures would be dominated by baseline incompetence. With n = 20 the Wilson lower bound at 15/20 is ≈ 0.53, so S3 is a feasibility threshold, not a precise estimate.
+- **Reported, not gating:** first-attempt validity, reference agreement (tool and arguments), temperature-0.7 success, outcome consistency across repetitions, retry and timeout rates, tokens, cold load time, time to first token (derived from Ollama's `load_duration` + `prompt_eval_duration`), end-to-end run time, peak runtime memory.
+- **Choice:**
+  - Primary: the qualifying model with the highest temperature-0 task success. Within 1 run of each other, lower median latency wins, then lower peak memory.
+  - Fallback: the other qualifying model.
+  - If none qualify, the result is reported as such and alternatives are proposed as a **new** experiment.
+
+**Stop rules.**
+- A candidate failing Stage A is stopped.
+- In Stage B, a candidate is stopped if ≥ 3/4 pilot runs abort, if swap grows > 1.5 GB, or if critical pressure is sustained.
+- Total wall budget is 3 h. If it is exceeded, the completed runs are reported and a reduced protocol is proposed.
+
 | Item | Plan |
 |---|---|
-| Objective | Measure, not assume: memory, latency and tool-call validity of the candidate models on the support environment. |
-| Scope | Install Ollama (after approval); download Qwen3-4B-Instruct-2507 Q4_K_M and Qwen3-1.7B Q4_K_M (≈ 3.6 GB disk); throwaway script outside `src/`; dev templates T1–T4 only. |
-| Approach | Call the HTTP API with the 5 tool schemas; 5 runs × 4 dev templates × 2 models × {temperature 0, 0.7}; log validity, latency, tokens and peak RSS (`/usr/bin/time -l`, `vm_stat`). |
-| Dependencies | Ollama (system install), model files; no Python dependency. |
-| Files | `scripts/spike_llm.py` (not packaged), results in `private/` or the TASKS verification log. |
-| Effort | 3 h · 1–2 sessions |
-| Hardware | ≤ 4.5 GB resident for the model; 4 GB free disk |
-| Acceptance | Measured table recorded; model/runtime decision recorded as an ADR; go/no-go for 2A.1. |
-| Testing | n/a (measurement spike) |
-| Risks | Memory pressure → fall back to 1.7B or a 2k context; poor tool-call validity → llama.cpp grammar constraint. |
-| Depends on | Approval **CP-2A.0** (install and download). |
-| Deliverables | Measurement table, ADR-029 (model/runtime), go/no-go. |
-| Stretch | Compare Phi-4-mini; llama.cpp grammar-constrained mode. |
+| Effort | 4 h · 2 sessions (plus unattended run time) |
+| Deliverables | `experiments/llm_feasibility/` (script, config, summary), ADR-029, TASKS log entries, go/no-go for 2A.1 |
+| Stretch | Phi-4-mini; llama.cpp grammar-constrained mode (only if Ollama proves unsuitable) |
 
 ### 2A.1 Provider interface and `LLMPolicy`
 | Item | Plan |
@@ -161,7 +221,7 @@ On 8 GB, with macOS, an IDE and a browser using roughly 4 GB, the 4B model fits 
 | Item | Plan |
 |---|---|
 | Objective | Fresh LLM execution for regression and counterfactuals, with honest handling of nondeterminism and reference availability. |
-| Scope | **Regression:** k fresh runs (default k = 5) of a candidate (model, prompt or policy version); pass rate with Wilson CI; verdicts `DETERMINISTIC_*` only when all k runs agree and the policy is deterministic, otherwise `STOCHASTIC` with rate and interval; comparison against the baseline rate (Newcombe interval). **Counterfactuals:** downstream decisions after the fence are fresh model calls; the intervention and placebo arms each run k times; evidence `INTERVENTIONAL_REPAIR` only if a pre-specified criterion holds (e.g., intervention pass rate − placebo pass rate > 0 with the lower Newcombe bound > 0); otherwise `INCONCLUSIVE` (new label, additive). Placebo validity becomes a rate and is reported. **References:** each reference carries provenance (`ENVIRONMENT_TOOL` trusted, `SCRIPTED_REFERENCE_POLICY`, `GOLD_TRAJECTORY`, `HUMAN_ANNOTATION`, `NONE`); LLM decisions without a reference → `UNSUPPORTED (no_trusted_reference)`, always reported, never dropped. |
+| Scope | **Regression:** k fresh runs (default k = 5) of a candidate (model, prompt or policy version); pass rate with Wilson CI; verdicts `DETERMINISTIC_*` only when all k runs agree and the policy is deterministic, otherwise `STOCHASTIC` with rate and interval; comparison against the baseline rate (Newcombe interval). **Counterfactuals:** downstream decisions after the fence are fresh model calls; three arms (intervention, same-type placebo, no-intervention control) each run k times under the rules of §4.1; `INCONCLUSIVE` is a new, additive label. **References:** each reference carries provenance (`ENVIRONMENT_TOOL` trusted, `SCRIPTED_REFERENCE_POLICY`, `GOLD_TRAJECTORY`, `HUMAN_ANNOTATION`, `NONE`); LLM decisions without a reference → `UNSUPPORTED (no_trusted_reference)`, always reported, never dropped. |
 | Files | `replay/regression.py`, `replay/counterfactual.py`, `replay/service.py`, `localize/types.py` (`INCONCLUSIVE`), `localize/counterfactual.py`, `bench/stats.py` (Newcombe), docs. |
 | Effort | 6 h · 3 sessions |
 | Acceptance | Deterministic scripted policies give byte-identical results to v0.1.0 (regression guard); stochastic paths tested with a seeded `FakeProvider` that flips outcomes with known probabilities; `UNSUPPORTED` reasons always present. |
@@ -170,6 +230,34 @@ On 8 GB, with macOS, an IDE and a browser using roughly 4 GB, the 4B model fits 
 | Depends on | 2A.2 |
 | Deliverables | stochastic regression/CF, provenance, ADRs, specs. |
 | Stretch | Adaptive k (sequential stopping) — explicitly out of scope unless approved. |
+
+### 4.1 Stochastic counterfactual methodology (requirements for 2A.3 and 2D; not implemented in 2A.0)
+1. **Natural recovery.** A nondeterministic agent can recover without any intervention, so every counterfactual has three arms from the same fence:
+   - **intervention**: replace the step;
+   - **placebo**: same-type replacement with the original value;
+   - **no-intervention control**: fresh re-execution from the fence with nothing replaced.
+   
+   The control's pass rate is the natural-recovery rate.
+2. **Comparable arms.** The arms share model, digest, sampling parameters, seed schedule, prompt version, `max_steps`, timeouts and number of trials. Any difference (e.g. a trial that timed out) is reported per arm.
+3. **Transparent trials.** Every trial is a recorded run with arm, trial index and seed. Failed, timed-out or invalid trials count as failures and are never dropped.
+4. **Seeds.** A fixed seed does not guarantee identical outputs (batching, kernels, runtime versions). Determinism is measured as an outcome-agreement rate, never assumed.
+5. **Trial counts.** k = 5 per arm is a pilot setting. At k = 5 only extreme splits (e.g. 5/5 vs. 0/5) can exclude zero in a 95% interval. 2D sets k from a power analysis (e.g. ≈ 20 per arm to detect a 0.5 difference).
+6. **Evidence rule.**
+   - **Definitions:**
+     - *I*, *P*, *C* are the pass rates of the three arms;
+     - *Δ* = *I* − max(*P*, *C*);
+     - all intervals are Newcombe 95%.
+   - `INTERVENTIONAL_REPAIR` requires the lower bound of *Δ* > 0, ≥ 80% completed trials in every arm, and a valid placebo.
+   - **Invalid placebo:** the placebo is invalid if the lower bound of *P* − *C* > 0, i.e. replaying the original value itself changes outcomes. The step is then `INVALID_COUNTERFACTUAL`.
+   - `INCONCLUSIVE` applies when any of these holds:
+     - the interval of *Δ* includes 0;
+     - more than 20% of an arm's trials did not complete;
+     - *C* ≥ 0.5 (natural recovery too frequent to attribute anything).
+   - `NO_REPAIR_EVIDENCE` applies when the upper bound of *Δ* ≤ 0.1.
+   - The rule's false-repair rate is checked by simulation under the null before use.
+7. **Multiple candidate repair sites.** Every step meeting the rule is reported with its effect estimate and interval. Holm correction is applied across the steps tested in one run. The run conclusion is `MULTIPLE_REPAIR_SITES` when there is more than one site. No site is singled out as "the" cause.
+8. **Interpretation.** Interventional repair means "replacing this step was sufficient to raise the pass rate in this run's context". It is not proof of unique causality.
+9. **References.** Provenance says where a reference came from, not that it is correct. References are validated before use (agreement with the oracle on clean runs, spot checks). An unvalidated reference yields `UNSUPPORTED (reference_unvalidated)` or evidence explicitly marked as conditional on that reference. 2D measures the effect of imperfect references.
 
 ### 2A.4 End-to-end local LLM demonstration
 | Item | Plan |
@@ -181,7 +269,7 @@ On 8 GB, with macOS, an IDE and a browser using roughly 4 GB, the 4B model fits 
 | Depends on | 2A.3 · Approval **CP-2A** (end of 2A review) |
 | Deliverables | demo script, recorded traces, README section. |
 
-**2A total: 22 h (≈ 9–10 sessions).**
+**2A total: 23 h (≈ 9–10 sessions).**
 
 ---
 
@@ -297,7 +385,7 @@ A new, independent benchmark. **The synth_v0 held-out split is not used for any 
   - **imperfect references** (a reference policy with a known, injected error rate);
   - **missing references** (none for LLM decisions).
   - Reference quality is measured on clean runs (agreement with the oracle) and recorded with provenance.
-- **Repeated trials:** every instance is recorded r times (e.g., r = 3) to estimate outcome variability; counterfactual arms use k repeats (§2A.3).
+- **Repeated trials:** every instance is recorded r times (e.g., r = 3) to estimate outcome variability; counterfactual arms (intervention, placebo, no-intervention control) use k repeats under §4.1, with k from the power analysis.
 - **Metrics, kept strictly separate:**
   1. **Injection-site localization** (Top-1/Top-3/MRR on controlled single-site instances);
   2. **Suspicious-step ranking** quality on natural failures where an annotated responsible step exists;
@@ -337,13 +425,13 @@ Any external claim, publication or patent filing needs the literature review and
 
 | Phase | Mandatory effort | Sessions (2.5 h) | Calendar at ~15 h/week |
 |---|---|---|---|
-| 2A | 22 h | 9–10 | ~1.5 weeks |
+| 2A | 23 h | 9–10 | ~1.5 weeks |
 | 2B | 16 h | 6–7 | ~1 week |
 | 2C | 39 h | 16 | ~2.5–3 weeks |
 | 2D | 30 h (+ compute) | 12 | ~2 weeks (+ overnight compute) |
-| **Subtotal** | **107 h** | **~43** | **~7–7.5 weeks** |
-| Contingency (20%) | 21 h | ~9 | ~1.5 weeks |
-| **Total mandatory** | **≈ 128 h** | **~52** | **≈ 9 weeks** |
+| **Subtotal** | **108 h** | **~43** | **~7–7.5 weeks** |
+| Contingency (20%) | 22 h | ~9 | ~1.5 weeks |
+| **Total mandatory** | **≈ 130 h** | **~52** | **≈ 9 weeks** |
 | Optional/stretch pool | ≈ 20 h | ~8 | as time allows |
 
 Recommended order: 2A → 2B → 2C.0–2C.3 → 2D.0–2D.1 → 2C.4–2C.5 → 2D.2–2D.3. 2C can be paused at any milestone boundary without blocking 2D.
