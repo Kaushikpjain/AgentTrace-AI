@@ -24,6 +24,21 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/agenttrace"]
 
+# Research-sensitive planning material, private notes and experiment outputs are kept in the
+# repository but never distributed (ADR-030). Checked by `make dist-check`.
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/docs/PLAN_v0.2.1.md",
+    "/docs/archive",
+    "/docs/PHASE2_PLAN.md",
+    "/docs/WEEK4_PLAN.md",
+    "/private",
+    "/experiments",
+    "/.env*",
+    "/runs",
+    "/results",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8",

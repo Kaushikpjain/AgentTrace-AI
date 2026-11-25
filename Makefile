@@ -1,5 +1,5 @@
 # AgentTrace AI development commands. Requires uv (https://docs.astral.sh/uv/).
-.PHONY: help install lint format typecheck test cov check smoke verify-bench bench-dev reproduce-dev audit demo clean
+.PHONY: help install lint format typecheck test cov check smoke verify-bench bench-dev reproduce-dev audit dist-check demo clean
 
 UV ?= uv
 TMP := $(shell mktemp -d 2>/dev/null || echo /tmp/agenttrace)
@@ -13,6 +13,7 @@ help:
 	@echo "bench-dev      evaluate the dev split into evaluation/synth_v0-dev"
 	@echo "reproduce-dev  run the dev evaluation twice and compare canonical outputs byte for byte"
 	@echo "audit          pip-audit of the locked dependencies"
+	@echo "dist-check     build wheel+sdist, check contents, install fresh, run T1"
 	@echo "demo           scripted three-minute terminal demonstration"
 
 install:
@@ -60,6 +61,13 @@ reproduce-dev:
 audit:
 	$(UV) export --format requirements-txt --frozen --no-emit-project > $(TMP)/requirements.txt
 	uvx pip-audit -r $(TMP)/requirements.txt --require-hashes --disable-pip --progress-spinner off
+
+dist-check:
+	$(UV) build --out-dir $(TMP)/dist >/dev/null
+	$(UV) run python -I scripts/check_dist.py $(TMP)/dist
+	$(UV) venv -q -p 3.12 $(TMP)/venv
+	$(UV) pip install -q --python $(TMP)/venv/bin/python $(TMP)/dist/*.whl
+	cd $(TMP) && $(TMP)/venv/bin/atrace run T1 --no-save >/dev/null && echo "fresh install OK"
 
 demo:
 	./scripts/demo.sh

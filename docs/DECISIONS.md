@@ -32,6 +32,7 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 | 026 | Hardened held-out guard, entry-point safeguards, run-log schema 2 (post-freeze) | Accepted |
 | 027 | Version 0.1.0; held-out metrics attributed to the frozen rc1 implementation | Accepted |
 | 028 | Phase 2 plan: provider-independent LLM policy, local-first stack (`docs/PHASE2_PLAN.md`) | **Proposed** (awaiting approval) |
+| 030 | Distribution excludes planning, private and experiment material | Accepted |
 
 ---
 
@@ -172,3 +173,7 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 - **Proposal:** add a provider-independent `LLMProvider` behind a new `LLMPolicy` that implements the existing `Policy` protocol, talking to a local runtime over HTTP with the stdlib. Primary runtime Ollama, fallback llama.cpp `llama-server`; primary model Qwen3-4B-Instruct-2507 (Q4_K_M), fallback Qwen3-1.7B. All of this is subject to the 2A.0 measurements. LangGraph, FastAPI and the web frontend are optional extras; the core dependencies are unchanged. The decision boundary stays the unit of replay, so strict replay never calls a model. Nondeterminism is handled with repeated trials and intervals, never with seeds alone.
 - **Status:** proposed in `docs/PHASE2_PLAN.md`; nothing installed or implemented.
 
+## ADR-030: Distribution hygiene (2026-11-25)
+- **Context:** hatchling's default sdist included every tracked file, including research-sensitive planning documents.
+- **Decision:** `[tool.hatch.build.targets.sdist].exclude` removes `docs/PLAN_v0.2.1.md`, `docs/archive/`, `docs/PHASE2_PLAN.md`, `docs/WEEK4_PLAN.md`, `private/`, `experiments/`, `.env*`, `runs/` and `results/`. The wheel ships only `src/agenttrace`. `make dist-check` builds both artifacts and runs `scripts/check_dist.py`, which checks for forbidden paths, model weights, local home-directory paths, private keys and credential-like assignments, and confirms the 8 scenario files are in the wheel. It then installs the wheel into a fresh venv and runs T1. A unit test pins the exclusion list.
+- **Not changed:** the files stay in the repository and in git history; they remain publicly readable while the repository is public (RELEASE.md). Nothing was published.

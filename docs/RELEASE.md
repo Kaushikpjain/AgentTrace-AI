@@ -11,7 +11,8 @@ Status per item. **[x]** = verified locally by an executed command (see TASKS.md
 - [x] `make reproduce-dev`: byte-identical canonical dev outputs
 - [x] `make audit`: pip-audit of the locked dependencies (no known vulnerabilities at the time of the check)
 - [x] `DEMO_NONINTERACTIVE=1 make demo`: scripted demo completes
-- [x] Clean wheel install into a fresh venv runs `atrace run T6`
+- [x] Clean wheel install into a fresh venv runs `atrace run T1` (`make dist-check`)
+- [x] Distributions exclude planning, private and experiment material (ADR-030; `make dist-check`: 0 problems in wheel and sdist)
 
 ## Evaluation
 - [x] Dev-split evaluation committed (`evaluation/synth_v0-dev/`) with all correctness checks OK
@@ -28,7 +29,7 @@ Status per item. **[x]** = verified locally by an executed command (see TASKS.md
 - [ ] Release tag `v0.1.0`: **proposed** as an annotated tag on the local release commit. It is not created until the owner approves; no GitHub release without approval
 
 ## Content safety
-- [ ] No research-sensitive planning material in the release tree. Pending owner decision: `docs/PLAN_v0.2.1.md`, `docs/archive/` (publicly readable on `main`; also included in the sdist built on 2026-11-25). Git history is not rewritten without approval
+- [ ] No research-sensitive planning material in the release tree. Pending owner decision: `docs/PLAN_v0.2.1.md`, `docs/archive/` (publicly readable on `main`; excluded from distributions since ADR-030). Git history is not rewritten without approval
 - [x] No secrets, credentials or personal data in tracked files (scanned)
 - [x] `private/` is git-ignored
 
