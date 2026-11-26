@@ -65,10 +65,11 @@ Also pulled forward from W3.1 (needed by strict replay, approved 2026-11-23): ve
 ## Stretch (+16 h, PLAN §18)
 S1 templates T4/T7/T8 (1.0) **DONE in W1.5** · S2 property P2/P3 full (1.5) · S3 classifier (2.0) · S4 B2 (0.5) · S5 LCS alignment (2.0) · S6 two-fault cases (1.0) **DONE (2 MULTI instances)** · S7 decoys (0.5) **DONE (8 decoy-only + 8 decoy+F4)** · S8 Rich timeline (1.5) · S9 CI bench smoke + pip-audit (1.0) · S10 boundary test + JSON-schema export (1.0) · S11 EVALUATION/SECURITY docs (2.0) · S12 demo video (0.5) · S13 robustness tests (1.5). All others `TODO`.
 
-## Phase 2 (CP-2.0 approved with conditions, 2026-11-25; plan `docs/PHASE2_PLAN.md`, ≈ 130 h incl. contingency)
+## Phase 2 (CP-2.0 approved with conditions, 2026-11-25; plan `docs/PHASE2_PLAN.md`, ≈ 133 h incl. contingency)
 | ID | Description | Status |
 |---|---|---|
-| P2-2A.0 | Local LLM feasibility experiment (protocol and selection criteria pre-registered in PHASE2_PLAN §2A.0) | IN_PROGRESS (CP-2A.0 approved) |
+| P2-2A.0 | Local LLM feasibility experiment (protocol and selection criteria pre-registered in PHASE2_PLAN §2A.0) | DONE: Stage A ✓ both; Stage B swap stop rule fired for both; Stage C not run; no model validated (ADR-029) |
+| P2-2A.0b | Memory-controlled re-run of Qwen3-4B-Instruct-2507 (same criteria) | PROPOSED (needs approval) |
 | P2-2A.1 … 2D.3 | See PHASE2_PLAN | TODO (each needs its checkpoint) |
 
 Later backlog: ddmin · regression management · security suite · OTel export.
@@ -118,3 +119,7 @@ Later backlog: ddmin · regression management · security suite · OTel export.
 | 2026-11-25 (0.1.0) | `uv build` (wheel + sdist) → fresh venv `uv pip install` wheel → `atrace run T1 --no-save` | built `agenttrace-0.1.0`; installed version 0.1.0; T1 PASS, exit 0; `inject T5-F4` refused (exit 2); sdist contains no `private/` files but does contain the planning docs (RELEASE.md) |
 | 2026-11-25 (ADR-030) | `make dist-check` (uv build wheel+sdist → `scripts/check_dist.py` → fresh venv → `atrace run T1`); checker run on the earlier 0.1.0 sdist as a negative control | new: wheel 70 files / sdist 142 files, 0 problems, 8 scenarios in wheel, fresh install OK; earlier sdist: 3 forbidden files flagged (exit 1) |
 | 2026-11-25 (ADR-030) | `ruff check`, `ruff format --check`, `mypy`, `pytest` | clean; 345 passed |
+| 2026-11-26 (2A.0) | pre-checks: `ollama --version`, `lsof` on :11434, `df -h`, `vm.swapusage`, `memory_pressure`; registry manifests and licence/template/params blobs | Ollama 0.40.16 already installed, 127.0.0.1-only; 29 GiB free; swap 4.67 GB used before any model; tags, digests, sizes, Apache-2.0 and tool templates verified |
+| 2026-11-26 (2A.0) | `ollama pull` both models (one at a time); on-disk model-layer digests compared with the registry | `qwen3:1.7b-q4_K_M` 3d0b7905…, 1.36 GB, 3 min 15 s; `qwen3:4b-instruct-2507-q4_K_M` 85e4a5b7…, 2.50 GB, 5 min 58 s; digests match |
+| 2026-11-26 (2A.0) | 60 s memory baseline with no model loaded | pressure level 2 in 56/56 samples; swap 4.9–5.2 GB |
+| 2026-11-26 (2A.0) | `experiments/llm_feasibility/run.py --stage A/B` per model, then `analyze.py` | 10 runs, 0 aborted, 0 excluded; Stage A ✓ both; Stage B: 1.7B 0/4 PASS, +1,540 MB swap; 4B 3/4 PASS, +2,833 MB swap → stop rule fired for both; Stage C not run |

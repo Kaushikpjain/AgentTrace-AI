@@ -1,0 +1,78 @@
+{
+  "experiment": "2A.0 local LLM feasibility",
+  "protocol": "docs/PHASE2_PLAN.md section 2A.0 (pre-registered in commit 02e51b3 before any run)",
+  "runtime": {
+    "name": "ollama",
+    "version": "0.40.16",
+    "endpoint": "http://127.0.0.1:11434"
+  },
+  "models": [
+    {
+      "tag": "qwen3:1.7b-q4_K_M",
+      "model_layer_digest": "sha256:3d0b790534fe4b79525fc3692950408dca41171676ed7e21db57af5c65ef6ab6",
+      "download_bytes": 1359292957,
+      "licence": "Apache-2.0",
+      "think": false
+    },
+    {
+      "tag": "qwen3:4b-instruct-2507-q4_K_M",
+      "model_layer_digest": "sha256:85e4a5b7b8ef0e48af0e8658f5aaab9c2324c76c1641493f4d1e25fce54b18b9",
+      "download_bytes": 2497293316,
+      "licence": "Apache-2.0",
+      "think": null
+    }
+  ],
+  "scenarios": [
+    "T1",
+    "T2",
+    "T3",
+    "T4"
+  ],
+  "temperatures": [
+    0.0,
+    0.7
+  ],
+  "repetitions": 5,
+  "seed_base": 1000,
+  "options": {
+    "num_ctx": 4096,
+    "num_predict": 512,
+    "top_p": 0.8,
+    "top_k": 20,
+    "repeat_penalty": 1.0
+  },
+  "max_repair_retries": 1,
+  "context_guard_fraction": 0.9,
+  "call_timeout_s": 120,
+  "run_wall_cap_s": 600,
+  "total_wall_budget_s": 10800,
+  "run_order": "model -> repetition -> temperature -> template",
+  "unavoidable_differences": [
+    "think=false is sent to qwen3:1.7b only; qwen3:4b-instruct-2507 has no thinking mode"
+  ],
+  "reference_for_semantic_agreement": "agenttrace.policies.reference.GoldSupportReference('v2'); idempotency_key and note ignored; amounts compared numerically",
+  "selection_criteria": {
+    "S1_valid_after_retry_min": 0.95,
+    "S2_calls_without_argument_error_min": 0.95,
+    "S3_task_success_t0_min_runs": 15,
+    "S3_task_success_t0_n": 20,
+    "S3_per_template_min": 3,
+    "S4_warm_latency_median_max_s": 15,
+    "S4_warm_latency_p90_max_s": 30,
+    "S5_critical_pressure_max_fraction": 0.1,
+    "S5_swap_growth_max_mb": 1024,
+    "S6": "Apache-2.0/MIT-compatible licence; traffic to 127.0.0.1 only"
+  },
+  "stop_rules": {
+    "stage_b_abort_runs_of_4": 3,
+    "stage_b_swap_growth_max_mb": 1536
+  },
+  "amendments": [
+    {
+      "date": "2026-11-26",
+      "before": "qwen3:4b-instruct-2507 Stage A",
+      "change": "safety memory watchdog: abort a run after 15 consecutive 1 s samples at critical pressure (level 4); not a selection criterion",
+      "reason": "baseline pressure already at warning level with ~5 GB swap; qwen3:1.7b reached critical pressure in 26% of samples"
+    }
+  ]
+}

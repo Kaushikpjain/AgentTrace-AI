@@ -32,6 +32,7 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 | 026 | Hardened held-out guard, entry-point safeguards, run-log schema 2 (post-freeze) | Accepted |
 | 027 | Version 0.1.0; held-out metrics attributed to the frozen rc1 implementation | Accepted |
 | 028 | Phase 2 plan: provider-independent LLM policy, local-first stack (`docs/PHASE2_PLAN.md`) | Accepted with conditions (CP-2.0, 2026-11-25) |
+| 029 | 2A.0 measured model/runtime decision: no model validated; Qwen3-4B-Instruct-2507 via Ollama provisional, pending memory-controlled 2A.0b | Accepted (provisional) |
 | 030 | Distribution excludes planning, private and experiment material | Accepted |
 
 ---
@@ -177,3 +178,19 @@ Each ADR is short: context, decision, alternatives, trade-offs, and status. Chan
 - **Context:** hatchling's default sdist included every tracked file, including research-sensitive planning documents.
 - **Decision:** `[tool.hatch.build.targets.sdist].exclude` removes `docs/PLAN_v0.2.1.md`, `docs/archive/`, `docs/PHASE2_PLAN.md`, `docs/WEEK4_PLAN.md`, `private/`, `experiments/`, `.env*`, `runs/` and `results/`. The wheel ships only `src/agenttrace`. `make dist-check` builds both artifacts and runs `scripts/check_dist.py`, which checks for forbidden paths, model weights, local home-directory paths, private keys and credential-like assignments, and confirms the 8 scenario files are in the wheel. It then installs the wheel into a fresh venv and runs T1. A unit test pins the exclusion list.
 - **Not changed:** the files stay in the repository and in git history; they remain publicly readable while the repository is public (RELEASE.md). Nothing was published.
+
+## ADR-029: Local model and runtime after 2A.0 (measured, 2026-11-26)
+- **Evidence:** `experiments/llm_feasibility/RESULTS.md` and `results/summary.json`, with protocol and criteria pre-registered in `02e51b3`. 10 runs were completed (Stage A + B, dev T1–T4 only); none aborted; none excluded. The 80-run Stage C was **not** run because the pre-registered Stage B stop rule (swap growth > 1.5 GB) fired for both models.
+- **Measured:**
+  - **Both models:** native tool calls valid after ≤ 1 retry in every decision turn; 0 argument-caused errors; no thinking content; inference on 127.0.0.1 only.
+  - **Qwen3-1.7B:** 0/5 task success, ignoring the policy rules.
+  - **Qwen3-4B-Instruct-2507:** 4/5 task success; warm median 1.6 s per call (p90 4.0 s); loaded size 3.18 GB.
+  - **Memory, both models:** the machine was at warning pressure with about 5 GB swap before loading; with a model loaded swap grew by 1.5–2.8 GB and critical pressure appeared in 16–32% of samples.
+- **Decision:**
+  - **Runtime:** Ollama stays the primary runtime. It worked offline, locally and with native tool calling. llama.cpp is not needed yet.
+  - **Primary model:** **no model is validated.** Qwen3-4B-Instruct-2507 (Q4_K_M) is the **provisional** primary candidate. The criteria are not relaxed.
+  - **Fallback model:** Qwen3-1.7B is **rejected** for semantic reasons; there is **no validated fallback**.
+  - **Next experiment:** a memory-controlled re-run (2A.0b: closed background apps, `num_ctx` 2048, optionally flash attention + q8_0 KV cache) must pass S1–S6 before the model choice is final.
+- **Consequences:**
+  - 2A.1 can proceed independently of the model choice, because the provider abstraction and `FakeProvider` tests need no model. Real-model integration tests wait for 2A.0b.
+  - Recommended defaults for any further experiment: `num_ctx` 2048–4096, temperature 0 for recording, one bounded repair retry, `keep_alive` short, and one model loaded at a time.

@@ -179,9 +179,18 @@ An unrelated model already on disk (`qwen2.5-coder:7b`) is not used or modified.
 - In Stage B, a candidate is stopped if ≥ 3/4 pilot runs abort, if swap grows > 1.5 GB, or if critical pressure is sustained.
 - Total wall budget is 3 h. If it is exceeded, the completed runs are reported and a reduced protocol is proposed.
 
+**Outcome (2026-11-26, measured; details in `experiments/llm_feasibility/RESULTS.md`, ADR-029).**
+- Stage A passed for both models.
+- In Stage B the swap stop rule fired for both:
+  - Qwen3-1.7B: +1.54 GB swap, 0/4 task success;
+  - Qwen3-4B-Instruct-2507: +2.83 GB swap, 3/4 task success.
+- Stage C was not run; the criteria were not relaxed.
+- **No model is validated yet.** Qwen3-4B-Instruct-2507 is the provisional primary candidate; there is no validated fallback.
+- **Proposed 2A.0b** (needs approval; same criteria): a controlled memory baseline, `num_ctx` 2048, optional flash attention + q8_0 KV cache, and the 4B model only, with Stage B followed by a 40-run Stage C.
+
 | Item | Plan |
 |---|---|
-| Effort | 4 h · 2 sessions (plus unattended run time) |
+| Effort | 4 h · 2 sessions (plus unattended run time); 2A.0b +2–3 h |
 | Deliverables | `experiments/llm_feasibility/` (script, config, summary), ADR-029, TASKS log entries, go/no-go for 2A.1 |
 | Stretch | Phi-4-mini; llama.cpp grammar-constrained mode (only if Ollama proves unsuitable) |
 
@@ -269,7 +278,7 @@ An unrelated model already on disk (`qwen2.5-coder:7b`) is not used or modified.
 | Depends on | 2A.3 · Approval **CP-2A** (end of 2A review) |
 | Deliverables | demo script, recorded traces, README section. |
 
-**2A total: 23 h (≈ 9–10 sessions).**
+**2A total: 26 h (≈ 10–11 sessions), including 2A.0b.**
 
 ---
 
@@ -425,13 +434,13 @@ Any external claim, publication or patent filing needs the literature review and
 
 | Phase | Mandatory effort | Sessions (2.5 h) | Calendar at ~15 h/week |
 |---|---|---|---|
-| 2A | 23 h | 9–10 | ~1.5 weeks |
+| 2A | 26 h | 10–11 | ~1.5–2 weeks |
 | 2B | 16 h | 6–7 | ~1 week |
 | 2C | 39 h | 16 | ~2.5–3 weeks |
 | 2D | 30 h (+ compute) | 12 | ~2 weeks (+ overnight compute) |
-| **Subtotal** | **108 h** | **~43** | **~7–7.5 weeks** |
+| **Subtotal** | **111 h** | **~44** | **~7.5 weeks** |
 | Contingency (20%) | 22 h | ~9 | ~1.5 weeks |
-| **Total mandatory** | **≈ 130 h** | **~52** | **≈ 9 weeks** |
+| **Total mandatory** | **≈ 133 h** | **~53** | **≈ 9 weeks** |
 | Optional/stretch pool | ≈ 20 h | ~8 | as time allows |
 
 Recommended order: 2A → 2B → 2C.0–2C.3 → 2D.0–2D.1 → 2C.4–2C.5 → 2D.2–2D.3. 2C can be paused at any milestone boundary without blocking 2D.
